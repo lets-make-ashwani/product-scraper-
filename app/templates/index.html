@@ -35,14 +35,20 @@
             <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
               Universal Scraper & Telegram Engine
             </h1>
-            <p class="text-sm text-slate-400">Multi-Platform (Meesho • Flipkart • Myntra • Amazon) with Color Variant Merger</p>
+            <p class="text-sm text-slate-400">Multi-Platform (Meesho • Flipkart • Myntra • Amazon) with Color Variant Merger & Groq AI</p>
           </div>
         </div>
       </div>
-      <div class="flex items-center gap-3">
-        <button onclick="testTelegram()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg transition border border-slate-700 flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-3">
+        <button onclick="testAi()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition border border-slate-700 flex items-center gap-2">
+          <i class="fa-solid fa-brain text-purple-400"></i> Test Groq AI
+        </button>
+        <button onclick="testTelegram()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition border border-slate-700 flex items-center gap-2">
           <i class="fa-brands fa-telegram text-sky-400"></i> Test Telegram
         </button>
+        <span id="ai-badge" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
+          <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> Groq AI Active
+        </span>
         <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 24/7 Render Active
         </span>
@@ -93,8 +99,8 @@
         <p class="text-xs text-slate-400">Paste one or multiple product URLs from Meesho, Flipkart, Myntra, or Amazon. One URL per line.</p>
         <textarea id="url-input" rows="7" placeholder="https://www.meesho.com/...&#10;https://www.flipkart.com/...&#10;https://www.myntra.com/...&#10;https://www.amazon.in/dp/..." class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"></textarea>
         
-        <button id="import-btn" onclick="submitUrls()" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 font-semibold rounded-xl text-white shadow-lg shadow-indigo-500/20 transition flex items-center justify-center gap-2">
-          <i class="fa-solid fa-cloud-arrow-up"></i> Scrape & Auto-Publish
+        <button id="import-btn" onclick="submitUrls()" class="w-full py-3 bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-600 hover:from-indigo-600 hover:to-pink-700 font-semibold rounded-xl text-white shadow-lg shadow-indigo-500/20 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> AI Scrape & Auto-Publish
         </button>
 
         <div id="import-msg" class="hidden text-xs p-3 rounded-lg"></div>
@@ -102,10 +108,10 @@
         <div class="pt-4 border-t border-slate-800 text-xs text-slate-400 space-y-2">
           <p class="font-semibold text-slate-300">Supported Features:</p>
           <ul class="list-disc pl-4 space-y-1 text-slate-400">
-            <li>Automatic Color Variant Discovery & Extraction</li>
-            <li>Combined Telegram Album (balanced image selection)</li>
-            <li>Zero Render disk footprint (instant auto-deletion)</li>
-            <li>Persistent Telegram StringSession on cloud</li>
+            <li><b>Groq AI</b>: Copywriting, hashtags, and discount highlighting</li>
+            <li><b>Color Variants</b>: Combines all colors into single Telegram album</li>
+            <li><b>Zero Storage Bloat</b>: Instant ephemeral purge on Render</li>
+            <li><b>StringSession</b>: Persistent Telegram login in cloud env</li>
           </ul>
         </div>
       </div>
@@ -154,6 +160,15 @@
         document.getElementById('stat-total').innerText = stats.total_products || 0;
         document.getElementById('stat-published').innerText = stats.published_telegram || 0;
         document.getElementById('stat-queue').innerText = stats.pending_queue || 0;
+
+        const aiBadge = document.getElementById('ai-badge');
+        if (stats.groq_ai_enabled) {
+          aiBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20';
+          aiBadge.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Groq AI Active';
+        } else {
+          aiBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700';
+          aiBadge.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Groq AI Inactive';
+        }
 
         const prodRes = await fetch('/api/products?limit=25');
         const data = await prodRes.json();
@@ -221,7 +236,7 @@
       }
 
       btn.disabled = true;
-      btn.innerText = 'Queuing...';
+      btn.innerText = 'Queuing with AI...';
 
       try {
         const res = await fetch('/api/products/import', {
@@ -232,7 +247,7 @@
         const data = await res.json();
         
         msg.className = 'text-xs p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 block';
-        msg.innerText = `Queued ${data.total_imported} product(s) for scraping and Telegram publishing!`;
+        msg.innerText = `Queued ${data.total_imported} product(s) for AI scraping and Telegram publishing!`;
         input.value = '';
         loadData();
       } catch (err) {
@@ -240,7 +255,7 @@
         msg.innerText = 'Failed to import: ' + err.message;
       } finally {
         btn.disabled = false;
-        btn.innerText = 'Scrape & Auto-Publish';
+        btn.innerText = 'AI Scrape & Auto-Publish';
       }
     }
 
@@ -250,7 +265,17 @@
         const data = await res.json();
         alert(data.success ? '✅ ' + data.message : '❌ ' + data.message);
       } catch (e) {
-        alert('Connection error: ' + e.message);
+        alert('Telegram Connection error: ' + e.message);
+      }
+    }
+
+    async function testAi() {
+      try {
+        const res = await fetch('/api/ai/test', {method: 'POST'});
+        const data = await res.json();
+        alert(data.success ? '🤖 ' + data.message : '❌ ' + data.message);
+      } catch (e) {
+        alert('Groq AI error: ' + e.message);
       }
     }
 

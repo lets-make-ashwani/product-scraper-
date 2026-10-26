@@ -30,6 +30,11 @@ class Settings(BaseSettings):
         "🔗 <b>Buy Link:</b>\n{buy_url}"
     )
 
+    # Groq AI Configuration
+    GROQ_API_KEY: Optional[str] = None
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    AI_ENHANCE_POSTS: bool = True
+
     # Scraper & Worker
     REQUEST_DELAY_SECONDS: float = 2.0
     MAX_IMAGES_PER_PRODUCT: int = 10

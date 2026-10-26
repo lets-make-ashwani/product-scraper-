@@ -9,6 +9,7 @@ from app.scrapers.router import scraper_router
 from app.telegram.composer import telegram_composer
 from app.telegram.client import telegram_publisher
 from app.services.image_service import image_service
+from app.services.ai_service import ai_service
 from app.models.product import UniversalProduct
 
 logger = logging.getLogger("worker")
@@ -97,11 +98,14 @@ class BackgroundWorker:
                     
                     # Download images temporarily to Render disk
                     downloaded_files = await image_service.download_images(selected_img_urls, staging_dir)
-                    caption = telegram_composer.compose_caption(product)
+                    
+                    # Generate Base Caption and enhance via Groq AI if enabled
+                    base_caption = telegram_composer.compose_caption(product)
+                    final_caption = await ai_service.enhance_caption(product, base_caption)
 
                     # Post to Telegram
                     if downloaded_files:
-                        success, msg_ids, err_msg = await telegram_publisher.publish_album(downloaded_files, caption)
+                        success, msg_ids, err_msg = await telegram_publisher.publish_album(downloaded_files, final_caption)
                         if success:
                             product_data["status"] = "PUBLISHED"
                             product_data["telegram_message_ids"] = msg_ids

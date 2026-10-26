@@ -1,13 +1,16 @@
-# 🛍️ Universal Product Scraper & Telegram Engine
+# 🛍️ Universal Product Scraper, Groq AI & Telegram Engine
 
 An enterprise-grade, 24/7 cloud-native product scraper and Telegram publisher supporting **Meesho, Flipkart, Myntra, and Amazon**. 
 
-Features automatic **color variant discovery**, single combined Telegram album posting, **MongoDB** metadata storage, and **Render ephemeral image staging** with **instant auto-deletion** to maintain 0 MB long-term disk storage.
+Features automatic **color variant discovery**, single combined Telegram album posting, **Groq AI copywriting & post enhancement**, **MongoDB** metadata storage, and **Render ephemeral image staging** with **instant auto-deletion** to maintain 0 MB long-term disk storage.
 
 ---
 
 ## 🌟 Key Capabilities
 
+- **🤖 Groq AI Copywriting & Optimization**:
+  - Leverages lightning-fast LLMs (`llama-3.3-70b-versatile` / `llama-3.1-8b-instant`) at 500+ tokens/sec.
+  - Automatically turns raw, cluttered product descriptions into high-converting Telegram posts with bold pricing, discount urgency tags, color options, crisp highlights, and trending shopping hashtags.
 - **Multi-Platform Scraper Adapters**:
   - 🌸 **Meesho**: `__NEXT_DATA__` deep hydration + catalog variation extraction.
   - 🛒 **Flipkart**: JSON-LD Schema.org + color swatch selector mapping.
@@ -50,6 +53,10 @@ Features automatic **color variant discovery**, single combined Telegram album p
            [ Discover All Color Variants & Images ]
                               │
                               ▼
+                 🤖 [ Groq AI Copywriter ]
+        (Llama 3.3 70B: High-Converting Caption & Tags)
+                              │
+                              ▼
          [ Render Ephemeral Temp Scratch: /tmp/... ]
          (Downloads representative images per color)
                               │
@@ -76,6 +83,9 @@ Create a `.env` file locally or set these in your **Render Environment Settings*
 | `PORT` | Yes | Web server port (Render sets this dynamically) | `8000` |
 | `MONGODB_URI` | Yes | MongoDB Atlas or local MongoDB connection string | `mongodb+srv://user:pass@cluster0.mongodb.net/?retryWrites=true` |
 | `DATABASE_NAME` | No | Target MongoDB database name | `product_scraper_db` |
+| `GROQ_API_KEY` | Recommended | Free API Key from [console.groq.com](https://console.groq.com) | `gsk_abc123...` |
+| `GROQ_MODEL` | No | Target Groq model | `llama-3.3-70b-versatile` |
+| `AI_ENHANCE_POSTS`| No | Enable/disable AI copywriting | `True` |
 | `TELEGRAM_API_ID` | Yes | Telegram API ID from [my.telegram.org](https://my.telegram.org) | `12345678` |
 | `TELEGRAM_API_HASH` | Yes | Telegram API Hash from [my.telegram.org](https://my.telegram.org) | `0123456789abcdef0123456789abcdef` |
 | `TELEGRAM_SESSION_STRING` | Yes | Telethon StringSession (prevents file session loss) | `1BVtsOGQBu...` |
@@ -114,7 +124,7 @@ Copy the printed string and paste it into `TELEGRAM_SESSION_STRING` in Render!
 2. Go to [Render Dashboard](https://dashboard.render.com).
 3. Click **New +** $\rightarrow$ **Blueprint**.
 4. Connect this GitHub repository.
-5. Render will automatically read `render.yaml`, configure Docker, and prompt you to input your `MONGODB_URI`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and `TELEGRAM_SESSION_STRING`.
+5. Render will automatically read `render.yaml`, configure Docker, and prompt you to input your `MONGODB_URI`, `GROQ_API_KEY`, `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and `TELEGRAM_SESSION_STRING`.
 6. Click **Apply**! Your scraper is now live 24/7.
 
 ### Option B: Deploy as a Docker Web Service

@@ -26,6 +26,12 @@ services:
         sync: false
       - key: TELEGRAM_ENABLED
         value: "True"
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: AI_ENHANCE_POSTS
+        value: "True"
       - key: AUTO_PUBLISH
         value: "True"
       - key: REQUEST_DELAY_SECONDS

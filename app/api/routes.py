@@ -6,6 +6,7 @@ from app.db.mongodb import get_database
 from app.models.product import URLImportRequest, UniversalProduct
 from app.scrapers.router import scraper_router
 from app.telegram.client import telegram_publisher
+from app.services.ai_service import ai_service
 from app.config import settings
 
 router = APIRouter(prefix="/api", tags=["API"])
@@ -140,7 +141,7 @@ async def get_stats():
     """Get summary statistics for dashboard."""
     db = get_database()
     if db is None:
-        return {"status": "MongoDB offline", "total_products": 0, "published": 0, "pending_jobs": 0}
+        return {"status": "MongoDB offline", "total_products": 0, "published": 0, "pending_queue": 0}
 
     total_products = await db.products.count_documents({})
     published = await db.products.count_documents({"status": "PUBLISHED"})
@@ -159,11 +160,18 @@ async def get_stats():
         "published_telegram": published,
         "pending_queue": pending_jobs,
         "processing_queue": processing_jobs,
-        "platforms": platforms
+        "platforms": platforms,
+        "groq_ai_enabled": bool(settings.GROQ_API_KEY and settings.AI_ENHANCE_POSTS)
     }
 
 @router.post("/telegram/test")
 async def test_telegram():
     """Verify Telegram session or bot connection."""
     success, message = await telegram_publisher.test_connection()
+    return {"success": success, "message": message}
+
+@router.post("/ai/test")
+async def test_ai():
+    """Verify Groq AI connection and model availability."""
+    success, message = await ai_service.test_connection()
     return {"success": success, "message": message}
