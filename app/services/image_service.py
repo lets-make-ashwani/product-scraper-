@@ -42,10 +42,14 @@ class EphemeralImageService:
 
                 dest_file = staging_dir / f"img_{idx:02d}.jpg"
                 try:
-                    res = await client.get(clean_url, headers={
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                    })
-                    if res.status_code == 200 and len(res.content) > 1024:
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Referer": "https://www.flipkart.com/"
+                    }
+                    res = await client.get(clean_url, headers=headers)
+                    if res.status_code == 200 and len(res.content) > 500:
                         # Save & Validate with PIL
                         with open(dest_file, "wb") as f:
                             f.write(res.content)
@@ -55,7 +59,9 @@ class EphemeralImageService:
                             im.verify()
 
                         valid_paths.append(dest_file)
-                        logger.debug(f"Downloaded temp image: {dest_file.name} ({len(res.content)} bytes)")
+                        logger.info(f"Downloaded image #{idx}: {dest_file.name} ({len(res.content) // 1024} KB)")
+                    else:
+                        logger.warning(f"Image {clean_url} returned HTTP {res.status_code} (size: {len(res.content)} bytes)")
                 except Exception as e:
                     logger.warning(f"Failed to download image {clean_url}: {e}")
                     if dest_file.exists():

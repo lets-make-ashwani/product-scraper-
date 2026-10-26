@@ -7,6 +7,7 @@ from app.models.product import URLImportRequest, UniversalProduct
 from app.scrapers.router import scraper_router
 from app.telegram.client import telegram_publisher
 from app.services.ai_service import ai_service
+from app.services.log_stream import terminal_logger_handler
 from app.config import settings
 
 router = APIRouter(prefix="/api", tags=["API"])
@@ -255,6 +256,18 @@ async def publish_all_unposted():
         queued += 1
 
     return {"success": True, "queued_count": queued, "message": f"Queued {queued} products for publishing."}
+
+@router.get("/logs")
+async def get_logs(since_id: int = 0):
+    """Fetch live terminal logs from memory ring-buffer."""
+    logs = terminal_logger_handler.get_logs(since_id=since_id)
+    return {"logs": logs, "total": len(logs)}
+
+@router.delete("/logs")
+async def clear_logs():
+    """Clear the live terminal logs buffer."""
+    terminal_logger_handler.clear()
+    return {"success": True, "message": "Terminal logs cleared."}
 
 @router.get("/jobs")
 async def get_jobs(limit: int = 30):

@@ -10,12 +10,14 @@ from app.config import settings
 from app.db.mongodb import connect_to_mongo, close_mongo_connection, get_database
 from app.services.worker import worker
 from app.api.routes import router as api_router
+from app.services.log_stream import setup_terminal_logging
 
 # Configure root logging
 logging.basicConfig(
     level=logging.INFO if not settings.DEBUG else logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
+setup_terminal_logging()
 logger = logging.getLogger("main")
 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
