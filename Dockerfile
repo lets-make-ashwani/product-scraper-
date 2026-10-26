@@ -40,7 +40,7 @@ WORKDIR /app
 # Copy dependency specifications and install
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt && \
+    pip install --no-cache-dir --retries 5 --timeout 60 -r requirements.txt && \
     playwright install --with-deps chromium
 
 # Copy application source code
