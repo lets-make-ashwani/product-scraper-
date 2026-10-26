@@ -52,8 +52,8 @@ app.add_middleware(
 # Include API Router
 app.include_router(api_router)
 
-# Healthcheck for Render
-@app.get("/health", tags=["Health"])
+# Healthcheck for Render (supports both GET and HEAD)
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["Health"])
 async def health_check():
     db = get_database()
     mongo_ok = db is not None
@@ -63,7 +63,7 @@ async def health_check():
         "worker_running": worker.is_running
     }
 
-# Web Dashboard
-@app.get("/", response_class=HTMLResponse, tags=["Dashboard"])
+# Web Dashboard (supports both GET and HEAD, modern Starlette TemplateResponse syntax)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse, tags=["Dashboard"])
 async def serve_dashboard(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="index.html")
