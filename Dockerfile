@@ -7,13 +7,15 @@ ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PORT=8000
 
-# Install system dependencies needed for Playwright and Chromium
+# Install system dependencies needed for Playwright, Chromium, and compilation tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     gnupg \
     ca-certificates \
     curl \
     git \
+    gcc \
+    python3-dev \
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
