@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     AI_ENHANCE_POSTS: bool = True
 
     # Scraper & Worker
-    REQUEST_DELAY_SECONDS: float = 2.0
+    REQUEST_DELAY_SECONDS: float = 3.5
     MAX_IMAGES_PER_PRODUCT: int = 10
     MAX_JOB_ATTEMPTS: int = 3
     AUTO_PUBLISH: bool = True

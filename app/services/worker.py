@@ -56,6 +56,8 @@ class BackgroundWorker:
 
                 if job:
                     await self._process_job(job)
+                    # Respectful pacing between jobs to prevent platform 429 rate limits
+                    await asyncio.sleep(settings.REQUEST_DELAY_SECONDS)
                 else:
                     await asyncio.sleep(2.0)
 
@@ -81,8 +83,37 @@ class BackgroundWorker:
 
             url = product_doc["product_url"]
 
-            # 1. Scrape product & all color variants
-            product: UniversalProduct = await scraper_router.scrape(url)
+            # 1. Scrape product & all color variants (with catalog failsafe)
+            try:
+                product: UniversalProduct = await scraper_router.scrape(url)
+            except Exception as scrape_err:
+                logger.warning(f"Product page scrape encountered issue: {scrape_err}")
+                product = None
+
+            # Failsafe: if individual page scrape was blocked or returned no images, use catalog pre-extracted data
+            if not product or not product.primary_images:
+                pre_imgs = product_doc.get("primary_images", [])
+                pre_title = product_doc.get("title")
+                pre_pricing = product_doc.get("pricing", {})
+                if pre_imgs:
+                    logger.info(f"Using search catalog pre-extracted images ({len(pre_imgs)}) and price for product {product_id}!")
+                    if not product:
+                        product = UniversalProduct(
+                            platform=product_doc.get("platform", "generic"),
+                            product_url=url,
+                            normalized_url=product_doc.get("normalized_url", url),
+                            title=pre_title or "Product"
+                        )
+                    product.primary_images = pre_imgs
+                    if pre_title and (not product.title or product.title == "Flipkart Product"):
+                        product.title = pre_title
+                    if pre_pricing.get("deal_price") and not product.pricing.deal_price:
+                        product.pricing.deal_price = pre_pricing.get("deal_price")
+                        product.pricing.mrp = pre_pricing.get("mrp")
+
+            if not product:
+                raise ValueError("Could not scrape product and no catalog fallback available.")
+
             product_data = product.model_dump(exclude={"id"})
             product_data["status"] = "SCRAPED"
             product_data["scraped_at"] = utc_now()

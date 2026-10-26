@@ -25,35 +25,80 @@ class FlipkartScraper(BaseScraper):
         u = url.lower()
         return "/search" in u or "q=" in u or "/pr?sid=" in u or "otracker=" in u or "searchtype=" in u
 
-    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
-        """Loads Flipkart search page and unpacks all individual product links."""
-        logger.info(f"[Flipkart] Unpacking search listing: {url}")
+    async def extract_search_catalog(self, url: str, max_items: int = 40) -> List[Dict[str, Any]]:
+        """
+        Loads Flipkart search page and unpacks full product cards:
+        URLs, Titles, Deal Prices, MRP, and 1664x1664 High-Res Images.
+        """
+        logger.info(f"[Flipkart] Unpacking search catalog with images & prices: {url}")
         html, error = await self.fetch_page_html(url, wait_selector="a[href*='/p/']")
         if error or not html:
             logger.warning(f"[Flipkart] Could not fetch search page: {error}")
             return []
 
         soup = BeautifulSoup(html, "html.parser")
-        product_links = []
+        products = []
         seen = set()
 
-        anchors = soup.find_all("a", href=re.compile(r'/p/itm|pid='))
-        for a in anchors:
-            href = a.get("href")
-            if not href:
+        cards = soup.find_all("div", attrs={"data-id": True})
+        if not cards:
+            cards = [a.find_parent("div") for a in soup.find_all("a", href=re.compile(r'/p/itm|pid='))]
+
+        for c in cards:
+            if not c:
                 continue
 
+            link_el = c.find("a", href=re.compile(r'/p/itm|pid='))
+            if not link_el or not link_el.get("href"):
+                continue
+
+            href = link_el["href"]
             full_url = f"https://www.flipkart.com{href}" if href.startswith("/") else href
-            norm = self.normalize_url(full_url)
+            norm_url = self.normalize_url(full_url)
+            if norm_url in seen or "/search" in norm_url:
+                continue
+            seen.add(norm_url)
 
-            if ("/p/" in norm or "pid=" in norm) and "/search" not in norm and norm not in seen:
-                seen.add(norm)
-                product_links.append(norm)
-                if len(product_links) >= max_items:
-                    break
+            # Title & Brand
+            title_el = c.find("a", title=True) or c.find("a", class_=re.compile(r"WKTcLC|IRpwTa|s1Q9rs"))
+            title = title_el.get("title") if title_el and title_el.get("title") else (title_el.get_text(strip=True) if title_el else "")
+            brand_el = c.find("div", class_=re.compile(r"syl9yP|_2WkVRV"))
+            brand = brand_el.get_text(strip=True) if brand_el else ""
+            if brand and brand.lower() not in title.lower():
+                title = f"{brand} {title}".strip()
+            if not title:
+                title = "Flipkart Product"
 
-        logger.info(f"[Flipkart] Discovered {len(product_links)} products from search page.")
-        return product_links
+            # Prices
+            prices = [re.sub(r'[^0-9.]', '', s) for s in c.find_all(string=re.compile(r'₹'))]
+            prices = [float(p) for p in prices if p and p.replace('.', '', 1).isdigit()]
+            deal_price = prices[0] if prices else None
+            mrp = prices[1] if len(prices) > 1 else None
+
+            # High-res Image
+            img = c.find("img")
+            src = img.get("src") or img.get("data-src") if img else ""
+            high_res = self._upgrade_image_url(src)
+            primary_images = [high_res] if high_res else []
+
+            products.append({
+                "product_url": norm_url,
+                "title": title,
+                "brand": brand or None,
+                "deal_price": deal_price,
+                "mrp": mrp,
+                "primary_images": primary_images
+            })
+
+            if len(products) >= max_items:
+                break
+
+        logger.info(f"[Flipkart] Discovered {len(products)} full product cards from search catalog.")
+        return products
+
+    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
+        items = await self.extract_search_catalog(url, max_items=max_items)
+        return [item["product_url"] for item in items]
 
     def normalize_url(self, url: str) -> str:
         """Strip affiliate/query tokens and keep canonical path with pid."""

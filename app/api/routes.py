@@ -36,15 +36,58 @@ async def import_urls(payload: URLImportRequest):
             continue
 
         # Check if the URL is a Search or Category Listing
-        target_urls = [clean_url]
         if scraper.is_search_url(clean_url):
-            discovered = await scraper.extract_search_product_urls(clean_url, max_items=40)
-            if not discovered:
+            catalog_items = await scraper.extract_search_catalog(clean_url, max_items=40)
+            if not catalog_items:
                 skipped.append({"url": clean_url, "reason": "No products could be extracted from search listing"})
                 continue
-            target_urls = discovered
 
-        for product_url in target_urls:
+            for item in catalog_items:
+                product_url = item["product_url"]
+                normalized_url = scraper.normalize_url(product_url)
+
+                existing = await db.products.find_one({"normalized_url": normalized_url})
+                if existing:
+                    skipped.append({"url": product_url, "reason": "Already exists in database"})
+                    continue
+
+                doc = {
+                    "platform": scraper.platform_name,
+                    "product_url": product_url,
+                    "normalized_url": normalized_url,
+                    "title": item.get("title") or f"Queued {scraper.platform_name.title()} Product",
+                    "brand": item.get("brand"),
+                    "status": "PENDING",
+                    "pricing": {
+                        "deal_price": item.get("deal_price"),
+                        "mrp": item.get("mrp"),
+                        "discount_percent": None,
+                        "discount_label": None
+                    },
+                    "sizes": [],
+                    "colors": [],
+                    "primary_images": item.get("primary_images", []),
+                    "created_at": utc_now(),
+                    "updated_at": utc_now()
+                }
+
+                res = await db.products.insert_one(doc)
+                product_id = res.inserted_id
+
+                job_doc = {
+                    "product_id": str(product_id),
+                    "job_type": "SCRAPE_AND_PUBLISH",
+                    "status": "PENDING",
+                    "attempts": 0,
+                    "max_attempts": settings.MAX_JOB_ATTEMPTS,
+                    "created_at": utc_now(),
+                    "updated_at": utc_now()
+                }
+                await db.jobs.insert_one(job_doc)
+                imported.append({"id": str(product_id), "url": product_url, "platform": scraper.platform_name})
+
+        else:
+            product_url = clean_url
             normalized_url = scraper.normalize_url(product_url)
 
             # Check existing
@@ -82,7 +125,6 @@ async def import_urls(payload: URLImportRequest):
                 "updated_at": utc_now()
             }
             await db.jobs.insert_one(job_doc)
-
             imported.append({"id": str(product_id), "url": product_url, "platform": scraper.platform_name})
 
     return {"imported": imported, "skipped": skipped, "total_imported": len(imported)}

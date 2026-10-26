@@ -38,6 +38,11 @@ class BaseScraper(ABC):
         """Extract individual product URLs from a search or category results page."""
         return []
 
+    async def extract_search_catalog(self, url: str, max_items: int = 40) -> List[dict]:
+        """Extract full product cards (URL, title, price, images) from a search page."""
+        urls = await self.extract_search_product_urls(url, max_items=max_items)
+        return [{"product_url": u, "title": f"Queued {self.platform_name.title()} Product", "deal_price": None, "mrp": None, "primary_images": []} for u in urls]
+
     async def fetch_page_html(self, url: str, wait_selector: Optional[str] = None) -> Tuple[str, Optional[str]]:
         """
         Hybrid Loader:
