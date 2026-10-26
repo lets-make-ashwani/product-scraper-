@@ -3,6 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, List
 from urllib.parse import urlparse, urlunparse
+import httpx
 from playwright.async_api import async_playwright, Browser, Page
 from app.models.product import UniversalProduct
 from app.config import settings
@@ -39,9 +40,39 @@ class BaseScraper(ABC):
 
     async def fetch_page_html(self, url: str, wait_selector: Optional[str] = None) -> Tuple[str, Optional[str]]:
         """
-        Loads page using Playwright Chromium with anti-bot evasion headers.
-        Returns: (html_content, error_message)
+        Hybrid Loader:
+        1. Ultra-fast direct HTTP fetch (<1s, 0 MB browser RAM footprint).
+        2. Seamless fallback to Playwright Chromium with anti-bot stealth evasions.
         """
+        # 1. Fast HTTP attempt
+        try:
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
+                "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+                "Sec-Ch-Ua-Mobile": "?0",
+                "Sec-Ch-Ua-Platform": '"Windows"',
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Upgrade-Insecure-Requests": "1"
+            }
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 200 and len(resp.text) > 10000:
+                    text_lower = resp.text.lower()
+                    if "captcha" not in text_lower and "access denied" not in text_lower:
+                        logger.info(f"[{self.platform_name}] Fast HTTP fetched {len(resp.text)} bytes successfully.")
+                        return resp.text, None
+        except Exception as e:
+            logger.debug(f"[{self.platform_name}] Fast HTTP attempt bypassed: {e}")
+
+        # 2. Playwright Chromium Fallback
         async with async_playwright() as p:
             browser: Browser = await p.chromium.launch(
                 headless=settings.HEADLESS_BROWSER,
@@ -67,15 +98,15 @@ class BaseScraper(ABC):
 
             # Prevent webdriver detection
             await context.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', {
-                    get: () => undefined
-                });
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                window.chrome = { runtime: {} };
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en', 'hi'] });
             """)
 
             page: Page = await context.new_page()
 
             try:
-                logger.info(f"[{self.platform_name}] Loading page: {url}")
+                logger.info(f"[{self.platform_name}] Playwright loading page: {url}")
                 await page.goto(url, wait_until="domcontentloaded", timeout=30000)
 
                 if wait_selector:
