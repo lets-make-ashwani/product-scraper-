@@ -201,7 +201,10 @@ class MeeshoScraper(BaseScraper):
         scripts = soup.find_all("script", type="application/ld+json")
         for s in scripts:
             try:
-                js = json.loads(s.string)
+                raw_json = s.get_text(strip=True)
+                if not raw_json:
+                    continue
+                js = json.loads(raw_json)
                 if isinstance(js, dict) and js.get("@type") == "Product":
                     product.title = js.get("name") or product.title
                     product.description = js.get("description") or product.description

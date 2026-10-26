@@ -88,11 +88,12 @@ class MyntraScraper(BaseScraper):
     def _extract_myx_data(self, soup: BeautifulSoup) -> Optional[Dict[str, Any]]:
         scripts = soup.find_all("script")
         for s in scripts:
-            if s.string and "window.__myx =" in s.string:
+            text = s.get_text()
+            if text and "window.__myx =" in text:
                 try:
-                    match = re.search(r'window\.__myx\s*=\s*({.*?});?</script>', s.string, re.DOTALL)
+                    match = re.search(r'window\.__myx\s*=\s*({.*?});?</script>', text, re.DOTALL)
                     if not match:
-                        match = re.search(r'window\.__myx\s*=\s*({.*?});', s.string, re.DOTALL)
+                        match = re.search(r'window\.__myx\s*=\s*({.*?});', text, re.DOTALL)
                     if match:
                         data = json.loads(match.group(1))
                         return data.get("pdpData", {})
@@ -167,7 +168,10 @@ class MyntraScraper(BaseScraper):
         scripts = soup.find_all("script", type="application/ld+json")
         for s in scripts:
             try:
-                js = json.loads(s.string)
+                raw_json = s.get_text(strip=True)
+                if not raw_json:
+                    continue
+                js = json.loads(raw_json)
                 if isinstance(js, dict) and js.get("@type") == "Product":
                     product.title = js.get("name") or product.title
                     product.description = js.get("description") or product.description

@@ -103,7 +103,10 @@ class FlipkartScraper(BaseScraper):
         scripts = soup.find_all("script", type="application/ld+json")
         for s in scripts:
             try:
-                js = json.loads(s.string)
+                raw_json = s.get_text(strip=True)
+                if not raw_json:
+                    continue
+                js = json.loads(raw_json)
                 items = js if isinstance(js, list) else [js]
                 for item in items:
                     if isinstance(item, dict) and item.get("@type") == "Product":
@@ -129,8 +132,8 @@ class FlipkartScraper(BaseScraper):
                             high_res = self._upgrade_image_url(img)
                             if high_res and high_res not in product.primary_images:
                                 product.primary_images.append(high_res)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"[Flipkart] JSON-LD parse notice: {e}")
 
     def _parse_dom(self, soup: BeautifulSoup, product: UniversalProduct):
         # Brand & Title
@@ -197,14 +200,26 @@ class FlipkartScraper(BaseScraper):
             if txt and txt not in product.sizes and len(txt) <= 6:
                 product.sizes.append(txt)
 
-        # Primary images from gallery thumbnails
-        img_nodes = soup.find_all("img", src=re.compile(r'rukminim\d*\.flixcart\.com/image/'))
-        for img in img_nodes:
-            src = img.get("src") or img.get("data-src")
-            if src:
-                high_res = self._upgrade_image_url(src)
+        # Primary images from gallery thumbnails / product photos
+        for img in soup.find_all("img"):
+            for attr in ["src", "data-src", "srcset"]:
+                val = img.get(attr)
+                if val and ("/image/" in val) and ("rukmini" in val or "flixcart" in val):
+                    # In case of srcset, take the first link
+                    first_link = val.split(",")[0].strip().split(" ")[0]
+                    high_res = self._upgrade_image_url(first_link)
+                    if high_res and high_res not in product.primary_images:
+                        product.primary_images.append(high_res)
+
+        # Failsafe: If still no images found, scan full page HTML for rukmini image URLs
+        if not product.primary_images:
+            pattern = re.compile(r'https?://[^\s"\'<>]*?(?:rukmini\d*|rukminim\d*)\.flixcart\.com/image/[^\s"\'<>]*?\.(?:jpeg|jpg|png|webp)', re.I)
+            for m in pattern.findall(str(soup)):
+                high_res = self._upgrade_image_url(m)
                 if high_res and high_res not in product.primary_images:
                     product.primary_images.append(high_res)
+                if len(product.primary_images) >= 10:
+                    break
 
     def _parse_color_variants(self, soup: BeautifulSoup, product: UniversalProduct):
         # Look for images inside color containers
@@ -215,7 +230,7 @@ class FlipkartScraper(BaseScraper):
                 parent_swatches = parent.find_all("img")
                 for img in parent_swatches:
                     alt_name = img.get("alt")
-                    src = img.get("src")
+                    src = img.get("src") or img.get("data-src")
                     link = img.find_parent("a")
                     if alt_name and src:
                         v_url = f"https://www.flipkart.com{link['href']}" if link and link.get("href") else None
@@ -241,16 +256,20 @@ class FlipkartScraper(BaseScraper):
                 img = item.find("img")
                 link = item.find("a")
                 color_title = item.get("title") or (img.get("alt") if img else None)
-                if color_title and img and img.get("src"):
+                src = img.get("src") or img.get("data-src") if img else None
+                if color_title and src:
                     v_url = f"https://www.flipkart.com{link['href']}" if link and link.get("href") else None
                     product.colors.append(ColorVariant(
                         color_name=color_title.strip(),
                         variant_url=v_url,
-                        image_urls=[self._upgrade_image_url(img["src"])]
+                        image_urls=[self._upgrade_image_url(src)]
                     ))
 
     def _upgrade_image_url(self, url: str) -> str:
         """Upgrades Flipkart thumbnail URLs to 1664x1664 high-resolution."""
         if not url:
             return ""
-        return re.sub(r'/image/\d+/\d+/', r'/image/1664/1664/', url.strip())
+        clean = url.strip().replace("&amp;", "&")
+        if clean.startswith("//"):
+            clean = "https:" + clean
+        return re.sub(r'/image/\d+/\d+/', r'/image/1664/1664/', clean)
