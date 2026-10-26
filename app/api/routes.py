@@ -91,7 +91,7 @@ async def get_products(
     platform: Optional[str] = None,
     status: Optional[str] = None,
     skip: int = 0,
-    limit: int = 50
+    limit: int = 100
 ):
     """Retrieve scraped products from MongoDB."""
     db = get_database()
@@ -99,9 +99,9 @@ async def get_products(
         raise HTTPException(status_code=503, detail="MongoDB not connected.")
 
     query = {}
-    if platform:
+    if platform and platform != "all":
         query["platform"] = platform.lower()
-    if status:
+    if status and status != "all":
         query["status"] = status.upper()
 
     cursor = db.products.find(query).sort("created_at", -1).skip(skip).limit(limit)
@@ -132,6 +132,130 @@ async def get_product_detail(product_id: str):
     doc["_id"] = str(doc["_id"])
     return doc
 
+@router.delete("/products/{product_id}")
+async def delete_product(product_id: str):
+    """Delete a single product and any of its queued or active jobs."""
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=503, detail="MongoDB not connected.")
+
+    try:
+        oid = ObjectId(product_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Product ID format.")
+
+    res = await db.products.delete_one({"_id": oid})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Product not found.")
+
+    # Remove any associated jobs
+    await db.jobs.delete_many({"product_id": product_id})
+    return {"success": True, "message": "Product and associated jobs successfully deleted."}
+
+@router.delete("/products")
+async def bulk_delete_products(delete_all: bool = False, status: Optional[str] = None):
+    """Bulk delete products: delete all, or delete by status (e.g. SCRAPED, PUBLISHED, FAILED)."""
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=503, detail="MongoDB not connected.")
+
+    if delete_all:
+        p_res = await db.products.delete_many({})
+        j_res = await db.jobs.delete_many({})
+        return {
+            "success": True,
+            "deleted_products": p_res.deleted_count,
+            "deleted_jobs": j_res.deleted_count,
+            "message": f"Successfully cleared all {p_res.deleted_count} products and {j_res.deleted_count} jobs."
+        }
+
+    if status and status != "all":
+        stat_upper = status.upper()
+        cursor = db.products.find({"status": stat_upper}, {"_id": 1})
+        p_ids = [str(doc["_id"]) async for doc in cursor]
+
+        p_res = await db.products.delete_many({"status": stat_upper})
+        j_res = await db.jobs.delete_many({"product_id": {"$in": p_ids}}) if p_ids else None
+        return {
+            "success": True,
+            "deleted_products": p_res.deleted_count,
+            "deleted_jobs": j_res.deleted_count if j_res else 0,
+            "message": f"Deleted {p_res.deleted_count} products with status {stat_upper}."
+        }
+
+    raise HTTPException(status_code=400, detail="Specify either delete_all=true or status=...")
+
+@router.post("/products/{product_id}/publish")
+async def publish_single_product(product_id: str):
+    """Manually queue or re-try publishing a specific product to Telegram."""
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=503, detail="MongoDB not connected.")
+
+    try:
+        oid = ObjectId(product_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid Product ID format.")
+
+    prod = await db.products.find_one({"_id": oid})
+    if not prod:
+        raise HTTPException(status_code=404, detail="Product not found.")
+
+    # Reset product status to PENDING
+    await db.products.update_one({"_id": oid}, {"$set": {"status": "PENDING", "error_message": None, "updated_at": utc_now()}})
+
+    # Insert or update background job
+    job = await db.jobs.find_one({"product_id": product_id})
+    if job:
+        await db.jobs.update_one(
+            {"_id": job["_id"]},
+            {"$set": {"status": "PENDING", "attempts": 0, "error_message": None, "updated_at": utc_now()}}
+        )
+    else:
+        await db.jobs.insert_one({
+            "product_id": product_id,
+            "job_type": "SCRAPE_AND_PUBLISH",
+            "status": "PENDING",
+            "attempts": 0,
+            "max_attempts": settings.MAX_JOB_ATTEMPTS,
+            "created_at": utc_now(),
+            "updated_at": utc_now()
+        })
+
+    return {"success": True, "message": f"Product queued for scraping & Telegram publishing."}
+
+@router.post("/products/publish-all")
+async def publish_all_unposted():
+    """Queue all unposted products (SCRAPED, FAILED, or PENDING) for publishing."""
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=503, detail="MongoDB not connected.")
+
+    cursor = db.products.find({"status": {"$ne": "PUBLISHED"}})
+    queued = 0
+    async for prod in cursor:
+        p_id = str(prod["_id"])
+        job = await db.jobs.find_one({"product_id": p_id})
+        if job:
+            await db.jobs.update_one(
+                {"_id": job["_id"]},
+                {"$set": {"status": "PENDING", "attempts": 0, "error_message": None, "updated_at": utc_now()}}
+            )
+        else:
+            await db.jobs.insert_one({
+                "product_id": p_id,
+                "job_type": "SCRAPE_AND_PUBLISH",
+                "status": "PENDING",
+                "attempts": 0,
+                "max_attempts": settings.MAX_JOB_ATTEMPTS,
+                "created_at": utc_now(),
+                "updated_at": utc_now()
+            })
+        await db.products.update_one({"_id": prod["_id"]}, {"$set": {"status": "PENDING", "error_message": None, "updated_at": utc_now()}})
+        queued += 1
+
+    return {"success": True, "queued_count": queued, "message": f"Queued {queued} products for publishing."}
+
 @router.get("/jobs")
 async def get_jobs(limit: int = 30):
     """Get background worker jobs."""
@@ -155,6 +279,10 @@ async def get_stats():
 
     total_products = await db.products.count_documents({})
     published = await db.products.count_documents({"status": "PUBLISHED"})
+    scraped = await db.products.count_documents({"status": "SCRAPED"})
+    failed = await db.products.count_documents({"status": "FAILED"})
+    pending_products = await db.products.count_documents({"status": "PENDING"})
+
     pending_jobs = await db.jobs.count_documents({"status": "PENDING"})
     processing_jobs = await db.jobs.count_documents({"status": "PROCESSING"})
 
@@ -168,10 +296,14 @@ async def get_stats():
     return {
         "total_products": total_products,
         "published_telegram": published,
+        "scraped_count": scraped,
+        "failed_count": failed,
+        "pending_count": pending_products,
         "pending_queue": pending_jobs,
         "processing_queue": processing_jobs,
         "platforms": platforms,
-        "groq_ai_enabled": bool(settings.GROQ_API_KEY and settings.AI_ENHANCE_POSTS)
+        "groq_ai_enabled": bool(settings.GROQ_API_KEY and settings.AI_ENHANCE_POSTS),
+        "telegram_channel": settings.TELEGRAM_CHAT_ID
     }
 
 @router.post("/telegram/test")

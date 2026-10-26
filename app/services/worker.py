@@ -110,11 +110,15 @@ class BackgroundWorker:
                             product_data["status"] = "PUBLISHED"
                             product_data["telegram_message_ids"] = msg_ids
                             product_data["posted_at"] = utc_now()
+                            product_data["error_message"] = None
                             logger.info(f"Product {product_id} published successfully to Telegram!")
                         else:
+                            product_data["status"] = "FAILED"
                             product_data["error_message"] = f"Telegram publish failed: {err_msg}"
                             logger.warning(f"Product {product_id} Telegram failure: {err_msg}")
                     else:
+                        product_data["status"] = "FAILED"
+                        product_data["error_message"] = "No valid images could be downloaded for this product."
                         logger.warning(f"No valid images downloaded for {product_id}, skipping Telegram album.")
 
                 finally:

@@ -15,37 +15,53 @@
     }
     .glass-card {
       background: rgba(30, 41, 59, 0.7);
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(14px);
       border: 1px solid rgba(255, 255, 255, 0.08);
       box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
     }
+    .glass-modal {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.4);
+      border-radius: 9999px;
+    }
   </style>
 </head>
-<body class="p-6 md:p-10">
-  <div class="max-w-7xl mx-auto space-y-8">
+<body class="p-4 md:p-8">
+  <div class="max-w-7xl mx-auto space-y-6">
     
     <!-- Top Header -->
-    <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-5">
       <div>
         <div class="flex items-center gap-3">
-          <div class="p-3 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/30">
+          <div class="p-3 bg-gradient-to-tr from-indigo-600 to-purple-600 rounded-2xl shadow-lg shadow-indigo-500/25">
             <i class="fa-solid fa-bolt text-2xl text-white"></i>
           </div>
           <div>
             <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
               Universal Scraper & Telegram Engine
             </h1>
-            <p class="text-sm text-slate-400">Multi-Platform (Meesho • Flipkart • Myntra • Amazon) with Color Variant Merger & Groq AI</p>
+            <p class="text-xs md:text-sm text-slate-400 mt-0.5">Multi-Platform (Meesho • Flipkart • Myntra • Amazon) with Color Variant Merger & Groq AI</p>
           </div>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-3">
-        <button onclick="testAi()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition border border-slate-700 flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2.5">
+        <button onclick="testAi()" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-700/80 flex items-center gap-2">
           <i class="fa-solid fa-brain text-purple-400"></i> Test Groq AI
         </button>
-        <button onclick="testTelegram()" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg transition border border-slate-700 flex items-center gap-2">
+        <button onclick="testTelegram()" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-700/80 flex items-center gap-2">
           <i class="fa-brands fa-telegram text-sky-400"></i> Test Telegram
         </button>
+        <a id="channel-pill" href="https://t.me/autoforwardlink" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 transition">
+          <i class="fa-brands fa-telegram"></i> <span id="channel-name">@autoforwardlink</span>
+        </a>
         <span id="ai-badge" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
           <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> Groq AI Active
         </span>
@@ -56,92 +72,148 @@
     </header>
 
     <!-- Metrics Row -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-      <div class="glass-card p-5 rounded-2xl">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="glass-card p-5 rounded-2xl relative overflow-hidden">
         <div class="flex justify-between items-start">
-          <span class="text-sm font-medium text-slate-400">Total Products</span>
-          <span class="p-2 bg-blue-500/10 text-blue-400 rounded-lg text-sm"><i class="fa-solid fa-boxes-stacked"></i></span>
+          <span class="text-xs font-medium uppercase tracking-wider text-slate-400">Total Products</span>
+          <span class="p-2 bg-blue-500/10 text-blue-400 rounded-xl text-sm"><i class="fa-solid fa-boxes-stacked"></i></span>
         </div>
-        <p id="stat-total" class="text-3xl font-bold text-white mt-3">0</p>
+        <p id="stat-total" class="text-3xl font-extrabold text-white mt-2">0</p>
+        <div class="mt-2 text-xs text-slate-500 flex items-center gap-2">
+          <span>Catalog size in MongoDB</span>
+        </div>
       </div>
-      <div class="glass-card p-5 rounded-2xl">
+
+      <div class="glass-card p-5 rounded-2xl relative overflow-hidden border-emerald-500/30">
         <div class="flex justify-between items-start">
-          <span class="text-sm font-medium text-slate-400">Published to Telegram</span>
-          <span class="p-2 bg-sky-500/10 text-sky-400 rounded-lg text-sm"><i class="fa-brands fa-telegram"></i></span>
+          <span class="text-xs font-medium uppercase tracking-wider text-emerald-400">Published to Telegram</span>
+          <span class="p-2 bg-emerald-500/15 text-emerald-400 rounded-xl text-sm"><i class="fa-brands fa-telegram"></i></span>
         </div>
-        <p id="stat-published" class="text-3xl font-bold text-white mt-3">0</p>
+        <p id="stat-published" class="text-3xl font-extrabold text-emerald-400 mt-2">0</p>
+        <div class="mt-2 text-xs text-emerald-400/80 flex items-center gap-1">
+          <i class="fa-solid fa-circle-check"></i> Multi-photo albums delivered
+        </div>
       </div>
-      <div class="glass-card p-5 rounded-2xl">
+
+      <div class="glass-card p-5 rounded-2xl relative overflow-hidden">
         <div class="flex justify-between items-start">
-          <span class="text-sm font-medium text-slate-400">Pending in Queue</span>
-          <span class="p-2 bg-amber-500/10 text-amber-400 rounded-lg text-sm"><i class="fa-solid fa-clock"></i></span>
+          <span class="text-xs font-medium uppercase tracking-wider text-amber-400">Pending in Queue</span>
+          <span class="p-2 bg-amber-500/10 text-amber-400 rounded-xl text-sm"><i class="fa-solid fa-clock"></i></span>
         </div>
-        <p id="stat-queue" class="text-3xl font-bold text-white mt-3">0</p>
+        <p id="stat-queue" class="text-3xl font-extrabold text-amber-400 mt-2">0</p>
+        <div class="mt-2 text-xs text-slate-500 flex items-center gap-1">
+          <span id="queue-indicator" class="w-2 h-2 rounded-full bg-slate-500"></span> Active Background Worker
+        </div>
       </div>
-      <div class="glass-card p-5 rounded-2xl">
+
+      <div class="glass-card p-5 rounded-2xl relative overflow-hidden">
         <div class="flex justify-between items-start">
-          <span class="text-sm font-medium text-slate-400">Render Ephemeral Storage</span>
-          <span class="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg text-sm"><i class="fa-solid fa-hard-drive"></i></span>
+          <span class="text-xs font-medium uppercase tracking-wider text-cyan-400">Render Ephemeral Storage</span>
+          <span class="p-2 bg-cyan-500/10 text-cyan-400 rounded-xl text-sm"><i class="fa-solid fa-hard-drive"></i></span>
         </div>
-        <p class="text-3xl font-bold text-emerald-400 mt-3">0 MB</p>
-        <span class="text-xs text-slate-500 block mt-1">Auto-purged after every post</span>
+        <p class="text-3xl font-extrabold text-cyan-300 mt-2">0 MB</p>
+        <div class="mt-2 text-xs text-slate-500 flex items-center gap-1">
+          <i class="fa-solid fa-broom text-cyan-400"></i> Auto-purged after every post
+        </div>
       </div>
     </div>
 
     <!-- Main Workspace -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
       
-      <!-- Left Column: URL Importer -->
-      <div class="glass-card p-6 rounded-2xl lg:col-span-1 space-y-4">
-        <h2 class="text-lg font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-plus-circle text-indigo-400"></i> Import Product URLs
-        </h2>
-        <p class="text-xs text-slate-400">Paste one or multiple product URLs from Meesho, Flipkart, Myntra, or Amazon. One URL per line.</p>
-        <textarea id="url-input" rows="7" placeholder="https://www.meesho.com/...&#10;https://www.flipkart.com/...&#10;https://www.myntra.com/...&#10;https://www.amazon.in/dp/..." class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"></textarea>
+      <!-- Left Column: URL Importer (4 cols) -->
+      <div class="glass-card p-5 rounded-2xl lg:col-span-4 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-plus-circle text-indigo-400"></i> Import Product URLs
+          </h2>
+          <span class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-medium">Batch / Search</span>
+        </div>
+
+        <p class="text-xs text-slate-400 leading-relaxed">
+          Paste <b>single product</b> links or <b>search / category catalog</b> links from Meesho, Flipkart, Myntra, or Amazon. One per line.
+        </p>
+
+        <textarea id="url-input" rows="8" placeholder="https://www.flipkart.com/search?q=western+dresses...&#10;https://www.meesho.com/...&#10;https://www.myntra.com/...&#10;https://www.amazon.in/dp/..." class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono custom-scrollbar resize-none"></textarea>
         
-        <button id="import-btn" onclick="submitUrls()" class="w-full py-3 bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-600 hover:from-indigo-600 hover:to-pink-700 font-semibold rounded-xl text-white shadow-lg shadow-indigo-500/20 transition flex items-center justify-center gap-2">
+        <button id="import-btn" onclick="submitUrls()" class="w-full py-3 bg-gradient-to-r from-indigo-500 via-purple-600 to-pink-600 hover:from-indigo-600 hover:to-pink-700 font-semibold rounded-xl text-white text-sm shadow-lg shadow-indigo-500/20 transition flex items-center justify-center gap-2">
           <i class="fa-solid fa-wand-magic-sparkles"></i> AI Scrape & Auto-Publish
         </button>
 
-        <div id="import-msg" class="hidden text-xs p-3 rounded-lg"></div>
+        <div id="import-msg" class="hidden text-xs p-3 rounded-xl"></div>
 
-        <div class="pt-4 border-t border-slate-800 text-xs text-slate-400 space-y-2">
-          <p class="font-semibold text-slate-300">Supported Features:</p>
-          <ul class="list-disc pl-4 space-y-1 text-slate-400">
-            <li><b>Groq AI</b>: Copywriting, hashtags, and discount highlighting</li>
-            <li><b>Color Variants</b>: Combines all colors into single Telegram album</li>
-            <li><b>Zero Storage Bloat</b>: Instant ephemeral purge on Render</li>
-            <li><b>StringSession</b>: Persistent Telegram login in cloud env</li>
+        <div class="pt-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-2">
+          <p class="font-semibold text-slate-300">Autonomous Features Active:</p>
+          <ul class="space-y-1.5 text-slate-400">
+            <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Search Catalog Auto-Unpacking (up to 40 items/link)</li>
+            <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Color Variant Merging into 1 Telegram Album</li>
+            <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Groq AI Copywriting + Guaranteed Clickable Links</li>
+            <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Instant Disk Clean: 0 MB storage footprint on Render</li>
           </ul>
         </div>
       </div>
 
-      <!-- Right Column: Products & Variants List -->
-      <div class="glass-card p-6 rounded-2xl lg:col-span-2 space-y-4">
-        <div class="flex justify-between items-center">
-          <h2 class="text-lg font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-list text-purple-400"></i> Live Products & Queue
-          </h2>
-          <button onclick="loadData()" class="text-xs text-slate-400 hover:text-white transition flex items-center gap-1">
-            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+      <!-- Right Column: Products & Variants List (8 cols) -->
+      <div class="glass-card p-5 rounded-2xl lg:col-span-8 space-y-4">
+        
+        <!-- Controls & Filter Bar -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-list-check text-purple-400"></i> Live Products & Queue
+            </h2>
+            <span id="live-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Live Auto-Refreshing"></span>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button onclick="publishAllPending()" title="Publish all unposted products" class="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
+              <i class="fa-solid fa-paper-plane"></i> Publish All
+            </button>
+            <button onclick="openDeleteModal()" title="Delete products from database" class="px-2.5 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold rounded-lg transition flex items-center gap-1.5">
+              <i class="fa-solid fa-trash-can"></i> Delete...
+            </button>
+            <button onclick="loadData(true)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-lg transition border border-slate-700 flex items-center gap-1">
+              <i class="fa-solid fa-arrows-rotate" id="refresh-icon"></i> Refresh
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="flex flex-wrap items-center gap-1.5 border-b border-slate-800 pb-2 text-xs">
+          <button onclick="setFilter('all')" id="tab-all" class="filter-tab px-3 py-1 rounded-lg font-semibold bg-indigo-600 text-white transition">
+            All <span id="badge-all" class="ml-1 opacity-75">0</span>
+          </button>
+          <button onclick="setFilter('PUBLISHED')" id="tab-published" class="filter-tab px-3 py-1 rounded-lg font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
+            Published <span id="badge-published" class="ml-1 px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400">0</span>
+          </button>
+          <button onclick="setFilter('PENDING')" id="tab-pending" class="filter-tab px-3 py-1 rounded-lg font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
+            In Queue <span id="badge-pending" class="ml-1 px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-400">0</span>
+          </button>
+          <button onclick="setFilter('SCRAPED')" id="tab-scraped" class="filter-tab px-3 py-1 rounded-lg font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
+            Scraped / Drafts <span id="badge-scraped" class="ml-1 px-1.5 py-0.2 rounded-full bg-blue-500/20 text-blue-400">0</span>
+          </button>
+          <button onclick="setFilter('FAILED')" id="tab-failed" class="filter-tab px-3 py-1 rounded-lg font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition">
+            Failed <span id="badge-failed" class="ml-1 px-1.5 py-0.2 rounded-full bg-rose-500/20 text-rose-400">0</span>
           </button>
         </div>
 
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-sm">
+        <!-- Table -->
+        <div class="overflow-x-auto custom-scrollbar">
+          <table class="w-full text-left border-collapse text-xs">
             <thead>
-              <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase">
-                <th class="py-3 px-3">Product</th>
-                <th class="py-3 px-3">Platform</th>
-                <th class="py-3 px-3">Price</th>
-                <th class="py-3 px-3">Colors</th>
-                <th class="py-3 px-3">Status</th>
-                <th class="py-3 px-3 text-right">Action</th>
+              <tr class="border-b border-slate-800 text-slate-400 uppercase tracking-wider text-[11px]">
+                <th class="py-2.5 px-3">Product</th>
+                <th class="py-2.5 px-3">Platform</th>
+                <th class="py-2.5 px-3">Price</th>
+                <th class="py-2.5 px-3">Colors</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody id="product-rows" class="divide-y divide-slate-800/60">
               <tr>
-                <td colspan="6" class="py-8 text-center text-slate-500 text-sm">Loading products...</td>
+                <td colspan="6" class="py-8 text-center text-slate-500">Loading products...</td>
               </tr>
             </tbody>
           </table>
@@ -152,32 +224,178 @@
 
   </div>
 
+  <!-- Delete Options Modal -->
+  <div id="delete-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="glass-modal max-w-md w-full p-6 rounded-2xl space-y-4 border border-rose-500/30">
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 bg-rose-500/20 text-rose-400 rounded-xl">
+          <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Delete Products & Queue</h3>
+          <p class="text-xs text-slate-400">Choose what you want to remove from MongoDB.</p>
+        </div>
+      </div>
+
+      <div class="space-y-2 pt-2">
+        <button onclick="executeBulkDelete('all')" class="w-full py-2.5 px-3 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-200 text-xs font-semibold rounded-xl text-left flex items-center justify-between transition">
+          <span><i class="fa-solid fa-trash-can mr-2"></i> Delete <b>ALL</b> Products & Jobs (Full Reset)</span>
+          <i class="fa-solid fa-chevron-right text-rose-400 text-xs"></i>
+        </button>
+        <button onclick="executeBulkDelete('SCRAPED')" class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium rounded-xl text-left flex items-center justify-between transition">
+          <span><i class="fa-solid fa-boxes-packing mr-2 text-blue-400"></i> Delete Only <b>Scraped / Draft</b> Products</span>
+          <i class="fa-solid fa-chevron-right text-slate-400 text-xs"></i>
+        </button>
+        <button onclick="executeBulkDelete('PUBLISHED')" class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium rounded-xl text-left flex items-center justify-between transition">
+          <span><i class="fa-solid fa-circle-check mr-2 text-emerald-400"></i> Delete Only <b>Published</b> Products</span>
+          <i class="fa-solid fa-chevron-right text-slate-400 text-xs"></i>
+        </button>
+        <button onclick="executeBulkDelete('FAILED')" class="w-full py-2.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium rounded-xl text-left flex items-center justify-between transition">
+          <span><i class="fa-solid fa-circle-xmark mr-2 text-rose-400"></i> Delete Only <b>Failed</b> Products</span>
+          <i class="fa-solid fa-chevron-right text-slate-400 text-xs"></i>
+        </button>
+      </div>
+
+      <div class="pt-2 flex justify-end">
+        <button onclick="closeDeleteModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    async function loadData() {
+    let currentFilter = 'all';
+    let channelUsername = '@autoforwardlink';
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-tab').forEach(tab => {
+        tab.className = 'filter-tab px-3 py-1 rounded-lg font-semibold bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition';
+      });
+      const activeTab = document.getElementById('tab-' + filter.toLowerCase());
+      if (activeTab) {
+        activeTab.className = 'filter-tab px-3 py-1 rounded-lg font-semibold bg-indigo-600 text-white transition';
+      }
+      loadData(false);
+    }
+
+    function openDeleteModal() {
+      document.getElementById('delete-modal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('delete-modal').classList.add('hidden');
+    }
+
+    async function executeBulkDelete(target) {
+      closeDeleteModal();
+      const confirmText = target === 'all' 
+        ? "Are you sure you want to delete ALL products and jobs? This cannot be undone." 
+        : `Delete all products with status '${target}'?`;
+      if (!confirm(confirmText)) return;
+
       try {
+        let url = '/api/products';
+        if (target === 'all') {
+          url += '?delete_all=true';
+        } else {
+          url += `?status=${target}`;
+        }
+
+        const res = await fetch(url, { method: 'DELETE' });
+        const data = await res.json();
+        alert(data.message || 'Deleted successfully.');
+        loadData(true);
+      } catch (err) {
+        alert('Failed to delete: ' + err.message);
+      }
+    }
+
+    async function deleteSingleProduct(productId, title) {
+      if (!confirm(`Delete product "${title}"?`)) return;
+
+      try {
+        const res = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
+        const data = await res.json();
+        loadData(false);
+      } catch (err) {
+        alert('Failed to delete: ' + err.message);
+      }
+    }
+
+    async function publishSingle(productId) {
+      try {
+        const res = await fetch(`/api/products/${productId}/publish`, { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Queued for publishing!');
+        loadData(false);
+      } catch (err) {
+        alert('Failed to queue: ' + err.message);
+      }
+    }
+
+    async function publishAllPending() {
+      if (!confirm('Queue all unposted products for scraping and Telegram publishing?')) return;
+      try {
+        const res = await fetch('/api/products/publish-all', { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Queued products!');
+        loadData(false);
+      } catch (err) {
+        alert('Failed to queue: ' + err.message);
+      }
+    }
+
+    async function loadData(showSpin = false) {
+      const refreshIcon = document.getElementById('refresh-icon');
+      if (showSpin && refreshIcon) refreshIcon.classList.add('fa-spin');
+
+      try {
+        // Fetch stats
         const statsRes = await fetch('/api/stats');
         const stats = await statsRes.json();
+        
         document.getElementById('stat-total').innerText = stats.total_products || 0;
         document.getElementById('stat-published').innerText = stats.published_telegram || 0;
         document.getElementById('stat-queue').innerText = stats.pending_queue || 0;
 
-        const aiBadge = document.getElementById('ai-badge');
-        if (stats.groq_ai_enabled) {
-          aiBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20';
-          aiBadge.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Groq AI Active';
-        } else {
-          aiBadge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700';
-          aiBadge.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> Groq AI Inactive';
+        document.getElementById('badge-all').innerText = stats.total_products || 0;
+        document.getElementById('badge-published').innerText = stats.published_telegram || 0;
+        document.getElementById('badge-pending').innerText = stats.pending_queue || 0;
+        document.getElementById('badge-scraped').innerText = stats.scraped_count || 0;
+        document.getElementById('badge-failed').innerText = stats.failed_count || 0;
+
+        if (stats.telegram_channel) {
+          channelUsername = stats.telegram_channel;
+          document.getElementById('channel-name').innerText = channelUsername;
+          const cleanUser = channelUsername.replace('@', '');
+          document.getElementById('channel-pill').href = `https://t.me/${cleanUser}`;
         }
 
-        const prodRes = await fetch('/api/products?limit=25');
+        const queueIndicator = document.getElementById('queue-indicator');
+        if (stats.pending_queue > 0 || stats.processing_queue > 0) {
+          queueIndicator.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
+        } else {
+          queueIndicator.className = 'w-2 h-2 rounded-full bg-slate-500';
+        }
+
+        // Fetch products with filter
+        let url = `/api/products?limit=100`;
+        if (currentFilter !== 'all') {
+          url += `&status=${currentFilter}`;
+        }
+
+        const prodRes = await fetch(url);
         const data = await prodRes.json();
         const tbody = document.getElementById('product-rows');
 
         if (!data.items || data.items.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-500 text-sm">No products added yet. Paste a URL on the left to start!</td></tr>';
+          tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-500">No products found for filter '${currentFilter}'.</td></tr>`;
           return;
         }
+
+        const cleanChannel = channelUsername.replace('@', '');
 
         tbody.innerHTML = data.items.map(p => {
           const platformColors = {
@@ -188,39 +406,118 @@
           };
           const pBadge = platformColors[p.platform] || 'bg-slate-700 text-slate-300';
 
-          const statusColors = {
-            PUBLISHED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-            SCRAPED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-            PENDING: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-            FAILED: 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-          };
-          const sBadge = statusColors[p.status] || 'bg-slate-700 text-slate-300';
-
+          // Price formatting
           const price = p.pricing && p.pricing.deal_price ? '₹' + p.pricing.deal_price.toLocaleString() : '-';
+          const mrp = p.pricing && p.pricing.mrp ? `<span class="line-through text-slate-500 text-[10px] ml-1">₹${p.pricing.mrp.toLocaleString()}</span>` : '';
+          const discount = p.pricing && p.pricing.discount_percent ? `<span class="text-[10px] text-emerald-400 ml-1">(${p.pricing.discount_percent}% off)</span>` : '';
+
+          // Colors
           const colorsCount = p.colors ? p.colors.length : 0;
+          const colorsLabel = colorsCount > 0 ? `${colorsCount} Colors` : '1 Default';
+
+          // Thumbnail image
+          let thumbImg = '';
+          if (p.primary_images && p.primary_images.length > 0) {
+            thumbImg = `<img src="${p.primary_images[0]}" class="w-10 h-10 object-cover rounded-lg border border-slate-700 shrink-0" onerror="this.style.display='none'">`;
+          } else {
+            thumbImg = `<div class="w-10 h-10 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0 text-slate-400 text-xs"><i class="fa-solid fa-tag"></i></div>`;
+          }
+
+          // Status & Telegram representation
+          let statusHtml = '';
+          if (p.status === 'PUBLISHED') {
+            const firstMsgId = (p.telegram_message_ids && p.telegram_message_ids.length > 0) ? p.telegram_message_ids[0] : null;
+            const tgLink = firstMsgId ? `https://t.me/${cleanChannel}/${firstMsgId}` : `https://t.me/${cleanChannel}`;
+            statusHtml = `
+              <div class="space-y-1">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  <i class="fa-solid fa-check-double text-[10px]"></i> PUBLISHED
+                </span>
+                <div>
+                  <a href="${tgLink}" target="_blank" class="inline-flex items-center gap-1 text-[11px] text-sky-400 hover:text-sky-300 font-medium">
+                    <i class="fa-brands fa-telegram"></i> View in Channel ${firstMsgId ? '#' + firstMsgId : ''} <i class="fa-solid fa-arrow-up-right-from-square text-[9px]"></i>
+                  </a>
+                </div>
+              </div>
+            `;
+          } else if (p.status === 'PENDING') {
+            statusHtml = `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                <i class="fa-solid fa-spinner fa-spin text-[10px]"></i> QUEUED
+              </span>
+            `;
+          } else if (p.status === 'PROCESSING') {
+            statusHtml = `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/15 text-blue-400 border border-blue-500/30 animate-pulse">
+                <i class="fa-solid fa-gear fa-spin text-[10px]"></i> POSTING...
+              </span>
+            `;
+          } else if (p.status === 'FAILED') {
+            statusHtml = `
+              <div class="space-y-0.5" title="${p.error_message || ''}">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                  <i class="fa-solid fa-circle-xmark text-[10px]"></i> FAILED
+                </span>
+                ${p.error_message ? `<div class="text-[10px] text-rose-400/80 truncate max-w-[140px]">${p.error_message}</div>` : ''}
+              </div>
+            `;
+          } else {
+            statusHtml = `
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-700 text-slate-300">
+                ${p.status}
+              </span>
+            `;
+          }
+
+          // Action buttons
+          let actionBtns = `
+            <div class="flex items-center justify-end gap-2">
+              <a href="${p.product_url}" target="_blank" class="p-1.5 text-slate-400 hover:text-white transition rounded hover:bg-slate-800" title="View Source Product">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              </a>
+          `;
+
+          if (p.status !== 'PUBLISHED') {
+            actionBtns += `
+              <button onclick="publishSingle('${p._id}')" class="p-1.5 text-indigo-400 hover:text-indigo-300 transition rounded hover:bg-slate-800" title="Scrape & Publish Now">
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+            `;
+          }
+
+          actionBtns += `
+              <button onclick="deleteSingleProduct('${p._id}', '${(p.title || 'Product').replace(/'/g, "\\'")}')" class="p-1.5 text-rose-400 hover:text-rose-300 transition rounded hover:bg-slate-800" title="Delete Product">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          `;
 
           return `
-            <tr class="hover:bg-slate-800/30 transition">
-              <td class="py-3 px-3 max-w-[220px] truncate font-medium text-slate-200" title="${p.title || ''}">${p.title || 'Queued Product'}</td>
-              <td class="py-3 px-3">
-                <span class="px-2 py-0.5 rounded text-xs border uppercase font-bold ${pBadge}">${p.platform}</span>
+            <tr class="hover:bg-slate-800/40 transition">
+              <td class="py-2.5 px-3 max-w-[240px]">
+                <div class="flex items-center gap-2.5">
+                  ${thumbImg}
+                  <div class="truncate">
+                    <p class="font-semibold text-slate-200 truncate" title="${p.title || ''}">${p.title || 'Queued Product'}</p>
+                    <p class="text-[10px] text-slate-500 truncate">${p.brand ? p.brand : p.platform.toUpperCase()}</p>
+                  </div>
+                </div>
               </td>
-              <td class="py-3 px-3 font-semibold text-slate-200">${price}</td>
-              <td class="py-3 px-3 text-slate-400 text-xs">${colorsCount > 0 ? colorsCount + ' Colors' : '1 Default'}</td>
-              <td class="py-3 px-3">
-                <span class="px-2 py-0.5 rounded text-xs border font-medium ${sBadge}">${p.status}</span>
+              <td class="py-2.5 px-3">
+                <span class="px-2 py-0.5 rounded text-[10px] border uppercase font-bold ${pBadge}">${p.platform}</span>
               </td>
-              <td class="py-3 px-3 text-right">
-                <a href="${p.product_url}" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1">
-                  View <i class="fa-solid fa-arrow-up-right-from-square"></i>
-                </a>
-              </td>
+              <td class="py-2.5 px-3 font-semibold text-slate-200">${price} ${mrp} ${discount}</td>
+              <td class="py-2.5 px-3 text-slate-400 text-xs">${colorsLabel}</td>
+              <td class="py-2.5 px-3">${statusHtml}</td>
+              <td class="py-2.5 px-3 text-right">${actionBtns}</td>
             </tr>
           `;
         }).join('');
 
       } catch (e) {
-        console.error('Error fetching data:', e);
+        console.error('Error loading data:', e);
+      } finally {
+        if (showSpin && refreshIcon) refreshIcon.classList.remove('fa-spin');
       }
     }
 
@@ -236,7 +533,7 @@
       }
 
       btn.disabled = true;
-      btn.innerText = 'Queuing with AI...';
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Queuing with AI...';
 
       try {
         const res = await fetch('/api/products/import', {
@@ -246,16 +543,16 @@
         });
         const data = await res.json();
         
-        msg.className = 'text-xs p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 block';
-        msg.innerText = `Queued ${data.total_imported} product(s) for AI scraping and Telegram publishing!`;
+        msg.className = 'text-xs p-3 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 block';
+        msg.innerHTML = `✅ <b>Queued ${data.total_imported} product(s)</b> for autonomous AI scraping and Telegram publishing!`;
         input.value = '';
-        loadData();
+        loadData(false);
       } catch (err) {
-        msg.className = 'text-xs p-3 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 block';
+        msg.className = 'text-xs p-3 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 block';
         msg.innerText = 'Failed to import: ' + err.message;
       } finally {
         btn.disabled = false;
-        btn.innerText = 'AI Scrape & Auto-Publish';
+        btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> AI Scrape & Auto-Publish';
       }
     }
 
@@ -279,8 +576,10 @@
       }
     }
 
-    loadData();
-    setInterval(loadData, 5000);
+    // Initial load
+    loadData(false);
+    // Live polling every 4 seconds
+    setInterval(() => loadData(false), 4000);
   </script>
 </body>
 </html>
