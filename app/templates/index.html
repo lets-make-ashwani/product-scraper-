@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Universal Product Scraper & Telegram Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      background: radial-gradient(circle at 10% 20%, rgb(18, 24, 38) 0%, rgb(10, 14, 23) 90.2%);
+      min-height: 100vh;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+    }
+  </style>
+</head>
+<body class="p-6 md:p-10">
+  <div class="max-w-7xl mx-auto space-y-8">
+    
+    <!-- Top Header -->
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-6">
+      <div>
+        <div class="flex items-center gap-3">
+          <div class="p-3 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-500/30">
+            <i class="fa-solid fa-bolt text-2xl text-white"></i>
+          </div>
+          <div>
+            <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+              Universal Scraper & Telegram Engine
+            </h1>
+            <p class="text-sm text-slate-400">Multi-Platform (Meesho • Flipkart • Myntra • Amazon) with Color Variant Merger</p>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="testTelegram()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg transition border border-slate-700 flex items-center gap-2">
+          <i class="fa-brands fa-telegram text-sky-400"></i> Test Telegram
+        </button>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 24/7 Render Active
+        </span>
+      </div>
+    </header>
+
+    <!-- Metrics Row -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="flex justify-between items-start">
+          <span class="text-sm font-medium text-slate-400">Total Products</span>
+          <span class="p-2 bg-blue-500/10 text-blue-400 rounded-lg text-sm"><i class="fa-solid fa-boxes-stacked"></i></span>
+        </div>
+        <p id="stat-total" class="text-3xl font-bold text-white mt-3">0</p>
+      </div>
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="flex justify-between items-start">
+          <span class="text-sm font-medium text-slate-400">Published to Telegram</span>
+          <span class="p-2 bg-sky-500/10 text-sky-400 rounded-lg text-sm"><i class="fa-brands fa-telegram"></i></span>
+        </div>
+        <p id="stat-published" class="text-3xl font-bold text-white mt-3">0</p>
+      </div>
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="flex justify-between items-start">
+          <span class="text-sm font-medium text-slate-400">Pending in Queue</span>
+          <span class="p-2 bg-amber-500/10 text-amber-400 rounded-lg text-sm"><i class="fa-solid fa-clock"></i></span>
+        </div>
+        <p id="stat-queue" class="text-3xl font-bold text-white mt-3">0</p>
+      </div>
+      <div class="glass-card p-5 rounded-2xl">
+        <div class="flex justify-between items-start">
+          <span class="text-sm font-medium text-slate-400">Render Ephemeral Storage</span>
+          <span class="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg text-sm"><i class="fa-solid fa-hard-drive"></i></span>
+        </div>
+        <p class="text-3xl font-bold text-emerald-400 mt-3">0 MB</p>
+        <span class="text-xs text-slate-500 block mt-1">Auto-purged after every post</span>
+      </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      
+      <!-- Left Column: URL Importer -->
+      <div class="glass-card p-6 rounded-2xl lg:col-span-1 space-y-4">
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-plus-circle text-indigo-400"></i> Import Product URLs
+        </h2>
+        <p class="text-xs text-slate-400">Paste one or multiple product URLs from Meesho, Flipkart, Myntra, or Amazon. One URL per line.</p>
+        <textarea id="url-input" rows="7" placeholder="https://www.meesho.com/...&#10;https://www.flipkart.com/...&#10;https://www.myntra.com/...&#10;https://www.amazon.in/dp/..." class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"></textarea>
+        
+        <button id="import-btn" onclick="submitUrls()" class="w-full py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 font-semibold rounded-xl text-white shadow-lg shadow-indigo-500/20 transition flex items-center justify-center gap-2">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Scrape & Auto-Publish
+        </button>
+
+        <div id="import-msg" class="hidden text-xs p-3 rounded-lg"></div>
+
+        <div class="pt-4 border-t border-slate-800 text-xs text-slate-400 space-y-2">
+          <p class="font-semibold text-slate-300">Supported Features:</p>
+          <ul class="list-disc pl-4 space-y-1 text-slate-400">
+            <li>Automatic Color Variant Discovery & Extraction</li>
+            <li>Combined Telegram Album (balanced image selection)</li>
+            <li>Zero Render disk footprint (instant auto-deletion)</li>
+            <li>Persistent Telegram StringSession on cloud</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Right Column: Products & Variants List -->
+      <div class="glass-card p-6 rounded-2xl lg:col-span-2 space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-list text-purple-400"></i> Live Products & Queue
+          </h2>
+          <button onclick="loadData()" class="text-xs text-slate-400 hover:text-white transition flex items-center gap-1">
+            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 text-xs uppercase">
+                <th class="py-3 px-3">Product</th>
+                <th class="py-3 px-3">Platform</th>
+                <th class="py-3 px-3">Price</th>
+                <th class="py-3 px-3">Colors</th>
+                <th class="py-3 px-3">Status</th>
+                <th class="py-3 px-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="product-rows" class="divide-y divide-slate-800/60">
+              <tr>
+                <td colspan="6" class="py-8 text-center text-slate-500 text-sm">Loading products...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script>
+    async function loadData() {
+      try {
+        const statsRes = await fetch('/api/stats');
+        const stats = await statsRes.json();
+        document.getElementById('stat-total').innerText = stats.total_products || 0;
+        document.getElementById('stat-published').innerText = stats.published_telegram || 0;
+        document.getElementById('stat-queue').innerText = stats.pending_queue || 0;
+
+        const prodRes = await fetch('/api/products?limit=25');
+        const data = await prodRes.json();
+        const tbody = document.getElementById('product-rows');
+
+        if (!data.items || data.items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-500 text-sm">No products added yet. Paste a URL on the left to start!</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.items.map(p => {
+          const platformColors = {
+            meesho: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
+            flipkart: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+            myntra: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+            amazon: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+          };
+          const pBadge = platformColors[p.platform] || 'bg-slate-700 text-slate-300';
+
+          const statusColors = {
+            PUBLISHED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+            SCRAPED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+            PENDING: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+            FAILED: 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+          };
+          const sBadge = statusColors[p.status] || 'bg-slate-700 text-slate-300';
+
+          const price = p.pricing && p.pricing.deal_price ? '₹' + p.pricing.deal_price.toLocaleString() : '-';
+          const colorsCount = p.colors ? p.colors.length : 0;
+
+          return `
+            <tr class="hover:bg-slate-800/30 transition">
+              <td class="py-3 px-3 max-w-[220px] truncate font-medium text-slate-200" title="${p.title || ''}">${p.title || 'Queued Product'}</td>
+              <td class="py-3 px-3">
+                <span class="px-2 py-0.5 rounded text-xs border uppercase font-bold ${pBadge}">${p.platform}</span>
+              </td>
+              <td class="py-3 px-3 font-semibold text-slate-200">${price}</td>
+              <td class="py-3 px-3 text-slate-400 text-xs">${colorsCount > 0 ? colorsCount + ' Colors' : '1 Default'}</td>
+              <td class="py-3 px-3">
+                <span class="px-2 py-0.5 rounded text-xs border font-medium ${sBadge}">${p.status}</span>
+              </td>
+              <td class="py-3 px-3 text-right">
+                <a href="${p.product_url}" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 inline-flex items-center gap-1">
+                  View <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                </a>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (e) {
+        console.error('Error fetching data:', e);
+      }
+    }
+
+    async function submitUrls() {
+      const input = document.getElementById('url-input');
+      const btn = document.getElementById('import-btn');
+      const msg = document.getElementById('import-msg');
+      const urls = input.value.split('\n').map(u => u.trim()).filter(Boolean);
+
+      if (urls.length === 0) {
+        alert('Please enter at least one product URL.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'Queuing...';
+
+      try {
+        const res = await fetch('/api/products/import', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({urls})
+        });
+        const data = await res.json();
+        
+        msg.className = 'text-xs p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 block';
+        msg.innerText = `Queued ${data.total_imported} product(s) for scraping and Telegram publishing!`;
+        input.value = '';
+        loadData();
+      } catch (err) {
+        msg.className = 'text-xs p-3 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20 block';
+        msg.innerText = 'Failed to import: ' + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.innerText = 'Scrape & Auto-Publish';
+      }
+    }
+
+    async function testTelegram() {
+      try {
+        const res = await fetch('/api/telegram/test', {method: 'POST'});
+        const data = await res.json();
+        alert(data.success ? '✅ ' + data.message : '❌ ' + data.message);
+      } catch (e) {
+        alert('Connection error: ' + e.message);
+      }
+    }
+
+    loadData();
+    setInterval(loadData, 5000);
+  </script>
+</body>
+</html>

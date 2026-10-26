@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: product-scraper-telegram
+    runtime: docker
+    plan: starter
+    region: oregon
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: MONGODB_URI
+        sync: false
+      - key: DATABASE_NAME
+        value: product_scraper_db
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: TELEGRAM_SESSION_STRING
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: TELEGRAM_ENABLED
+        value: "True"
+      - key: AUTO_PUBLISH
+        value: "True"
+      - key: REQUEST_DELAY_SECONDS
+        value: "2.0"
+      - key: MAX_IMAGES_PER_PRODUCT
+        value: "10"
+      - key: HEADLESS_BROWSER
+        value: "True"
+      - key: TEMP_DIR
+        value: /tmp/product_scraper_staging
