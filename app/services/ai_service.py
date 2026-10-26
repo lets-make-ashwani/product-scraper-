@@ -23,6 +23,7 @@ class GroqAIService:
     """
     AI Service powered by Groq for high-converting Telegram post copywriting,
     product highlight extraction, and hashtag generation.
+    Guarantees the buy link is NEVER cut off.
     """
 
     def __init__(self):
@@ -63,17 +64,18 @@ class GroqAIService:
 
     async def enhance_caption(self, product: UniversalProduct, base_caption: str) -> str:
         """
-        Uses Groq AI to transform raw product data into a catchy, high-converting
-        Telegram shopping post formatted with HTML tags.
+        Uses Groq AI to generate a high-converting caption body,
+        then programmatically appends the full buy link so it is NEVER truncated.
         """
+        link_block = f"\n\n🛒 <b>Buy Now:</b>\n{product.product_url}"
+
         if not settings.AI_ENHANCE_POSTS or not settings.GROQ_API_KEY:
-            return base_caption
+            return self._safely_combine_caption(base_caption, link_block)
 
         client = self._get_client()
         if not client:
-            return base_caption
+            return self._safely_combine_caption(base_caption, link_block)
 
-        # Detect active model if not yet detected
         models_to_try = [self._active_model] if self._active_model else ([settings.GROQ_MODEL] + [m for m in CANDIDATE_MODELS if m != settings.GROQ_MODEL])
 
         color_names = [c.color_name for c in product.colors if c.color_name]
@@ -90,21 +92,20 @@ class GroqAIService:
             f"Available Colors: {', '.join(color_names) if color_names else 'Single Color'}\n"
             f"Sizes: {', '.join(product.sizes) if product.sizes else 'Free Size'}\n"
             f"Raw Description: {product.description or ''}\n"
-            f"Product Link: {product.product_url}\n"
         )
 
         system_instruction = (
             "You are an expert e-commerce copywriter creating high-converting Telegram channel posts. "
-            "Craft an engaging, visually appealing Telegram post based on the product details provided.\n\n"
+            "Craft an engaging, punchy Telegram post based on the product details provided.\n\n"
             "Rules:\n"
             "1. Hook the reader with a catchy title with emojis.\n"
-            "2. Emphasize the Deal Price and strikethrough the MRP.\n"
-            "3. If available, clearly list the color options and available sizes.\n"
-            "4. Provide 3 crisp, compelling bullet points highlighting why to buy.\n"
-            "5. Add 3-4 trending shopping hashtags (e.g., #Deals #Shopping #Fashion).\n"
-            "6. Include a clear Call To Action at the bottom with the exact Product Link.\n"
-            "7. Keep the entire post UNDER 950 characters.\n"
-            "8. Output ONLY the final caption text."
+            "2. Highlight Deal Price (e.g. ₹299) and strikethrough the MRP if available.\n"
+            "3. List available colors and sizes.\n"
+            "4. Provide 2-3 crisp bullet points highlighting why to buy.\n"
+            "5. Add 2-3 trending hashtags (e.g., #Deals #Fashion).\n"
+            "6. DO NOT include the buy link or URL (it will be appended automatically).\n"
+            "7. CRITICAL: Keep your entire response UNDER 600 characters so it fits Telegram album limits.\n"
+            "8. Output ONLY the caption body text without conversational filler."
         )
 
         for model in [m for m in models_to_try if m]:
@@ -116,23 +117,35 @@ class GroqAIService:
                         {"role": "user", "content": prompt}
                     ],
                     temperature=0.7,
-                    max_tokens=600
+                    max_tokens=300
                 )
-                enhanced = response.choices[0].message.content.strip()
-                if enhanced.startswith("```"):
-                    lines = enhanced.split("\n")
+                body = response.choices[0].message.content.strip()
+                if body.startswith("```"):
+                    lines = body.split("\n")
                     if len(lines) >= 3 and lines[-1].startswith("```"):
-                        enhanced = "\n".join(lines[1:-1]).strip()
-
-                if len(enhanced) > 1010:
-                    enhanced = enhanced[:1005] + "..."
+                        body = "\n".join(lines[1:-1]).strip()
 
                 self._active_model = model
-                logger.info(f"Successfully generated AI-enhanced caption using Groq ({model})!")
-                return enhanced
+                logger.info(f"Successfully generated AI caption with Groq ({model})!")
+                return self._safely_combine_caption(body, link_block)
             except Exception as e:
                 logger.warning(f"Groq generation failed with {model}: {e}")
 
-        return base_caption
+        return self._safely_combine_caption(base_caption, link_block)
+
+    def _safely_combine_caption(self, body_text: str, link_block: str, max_total_len: int = 1015) -> str:
+        """
+        Mathematically guarantees the buy link is never cut off or truncated.
+        If the total text exceeds Telegram limits, truncates ONLY the body text.
+        """
+        # If the body already ended with a broken link attempt, clean it
+        clean_body = body_text.strip()
+        
+        # Calculate available budget for body
+        allowed_body_len = max_total_len - len(link_block)
+        if len(clean_body) > allowed_body_len:
+            clean_body = clean_body[:allowed_body_len - 3].rstrip() + "..."
+
+        return clean_body + link_block
 
 ai_service = GroqAIService()

@@ -36,26 +36,25 @@ class TelegramComposer:
 
         # Description / Highlights
         desc = (product.description or "High quality product with premium finish.").strip()
-        if len(desc) > 300:
-            desc = desc[:297] + "..."
+        if len(desc) > 250:
+            desc = desc[:247] + "..."
 
-        caption = settings.TELEGRAM_CAPTION_TEMPLATE.format(
-            title=product.title,
-            price=price_str,
-            mrp_info=mrp_info,
-            discount_info=discount_info,
-            rating_info=rating_info,
-            colors_info=colors_info,
-            sizes_info=sizes_info,
-            description=desc,
-            buy_url=product.product_url
+        link_block = f"\n\n🔗 <b>Buy Link:</b>\n{product.product_url}"
+
+        body = (
+            f"🛍️ <b>{product.title}</b>\n\n"
+            f"💰 <b>Deal Price:</b> ₹{price_str} {mrp_info} {discount_info}\n"
+            f"{rating_info}"
+            f"{colors_info}"
+            f"{sizes_info}\n"
+            f"✨ <b>Highlights:</b>\n{desc}"
         )
 
-        # Telegram caption length maximum is 1024 characters for media groups
-        if len(caption) > 1020:
-            caption = caption[:1015] + "..."
+        max_body_len = 1015 - len(link_block)
+        if len(body) > max_body_len:
+            body = body[:max_body_len - 3].rstrip() + "..."
 
-        return caption
+        return body + link_block
 
     @staticmethod
     def select_variant_images(product: UniversalProduct, max_images: int = 10) -> List[str]:
@@ -65,13 +64,10 @@ class TelegramComposer:
         """
         selected_images: List[str] = []
 
-        # If there are color variants, pull representative images from each
         if product.colors:
-            # 1 photo from primary product
             if product.primary_images:
                 selected_images.append(product.primary_images[0])
 
-            # Then round-robin from each color variant
             slots_remaining = max_images - len(selected_images)
             if slots_remaining > 0:
                 num_colors = len(product.colors)
@@ -86,7 +82,6 @@ class TelegramComposer:
                     if len(selected_images) >= max_images:
                         break
 
-        # Fallback to remaining primary images if slots remain
         for img in product.primary_images:
             if img not in selected_images:
                 selected_images.append(img)
