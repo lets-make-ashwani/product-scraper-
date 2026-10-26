@@ -256,6 +256,47 @@ async def publish_all_unposted():
 
     return {"success": True, "queued_count": queued, "message": f"Queued {queued} products for publishing."}
 
+@router.get("/debug/scrape")
+async def debug_scrape(url: str):
+    """Diagnostic endpoint to inspect scraper output and page HTML on Render."""
+    scraper = scraper_router.get_scraper(url)
+    if not scraper:
+        return {"error": "Unsupported platform"}
+
+    norm = scraper.normalize_url(url)
+    html, err = await scraper.fetch_page_html(norm)
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+
+    title_tag = soup.find("title")
+    title_text = title_tag.get_text() if title_tag else "No <title>"
+    h1 = soup.find("h1")
+    h1_text = h1.get_text() if h1 else "No <h1>"
+
+    # Check images
+    all_imgs = [img.get("src") or img.get("data-src") for img in soup.find_all("img")]
+    scripts = [s.get("type") for s in soup.find_all("script")]
+
+    # Run full extract
+    try:
+        product = await scraper.extract_product(url)
+        prod_data = product.model_dump()
+    except Exception as e:
+        prod_data = {"error": str(e)}
+
+    return {
+        "url": url,
+        "norm_url": norm,
+        "html_len": len(html),
+        "fetch_error": err,
+        "title_tag": title_text,
+        "h1": h1_text,
+        "has_captcha": "captcha" in html.lower() or "robot" in html.lower(),
+        "total_imgs_in_dom": len(all_imgs),
+        "sample_imgs": [i for i in all_imgs if i][:10],
+        "extracted_product": prod_data
+    }
+
 @router.get("/jobs")
 async def get_jobs(limit: int = 30):
     """Get background worker jobs."""
