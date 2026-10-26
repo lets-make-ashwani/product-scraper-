@@ -7,7 +7,14 @@ from app.config import settings
 
 logger = logging.getLogger("telegram.client")
 
-# Attempt Telethon import for StringSession support
+# Optional imports for Pyrogram and Telethon
+try:
+    from pyrogram import Client as PyrogramClient
+    from pyrogram.types import InputMediaPhoto
+    PYROGRAM_AVAILABLE = True
+except ImportError:
+    PYROGRAM_AVAILABLE = False
+
 try:
     from telethon import TelegramClient
     from telethon.sessions import StringSession
@@ -15,23 +22,47 @@ try:
 except ImportError:
     TELETHON_AVAILABLE = False
 
+
 class TelegramPublisher:
     """
-    Dual-mode Telegram Publisher.
-    Prefers Telethon StringSession (ideal for Render envs with 0 disk footprint).
-    Falls back to Telegram Bot API (sendMediaGroup) if Bot Token is provided.
+    Multi-engine Telegram Publisher:
+    1. Pyrogram StringSession (session string starting with 'BQ...')
+    2. Telethon StringSession (session string starting with '1B...')
+    3. Telegram Bot API fallback (sendMediaGroup HTTP endpoint)
     """
 
     def __init__(self):
+        self._pyrogram_client = None
         self._telethon_client = None
+
+    def _is_pyrogram_session(self) -> bool:
+        s = (settings.TELEGRAM_SESSION_STRING or "").strip()
+        return s.startswith("BQ")
+
+    async def _get_pyrogram_client(self):
+        if not PYROGRAM_AVAILABLE:
+            return None
+        if self._is_pyrogram_session() and settings.TELEGRAM_API_ID and settings.TELEGRAM_API_HASH:
+            if not self._pyrogram_client:
+                self._pyrogram_client = PyrogramClient(
+                    "user_session",
+                    session_string=settings.TELEGRAM_SESSION_STRING.strip(),
+                    api_id=int(settings.TELEGRAM_API_ID),
+                    api_hash=settings.TELEGRAM_API_HASH.strip(),
+                    in_memory=True
+                )
+                await self._pyrogram_client.start()
+                logger.info("Connected to Telegram using Pyrogram StringSession.")
+            return self._pyrogram_client
+        return None
 
     async def _get_telethon_client(self):
         if not TELETHON_AVAILABLE:
             return None
-
-        if settings.TELEGRAM_SESSION_STRING and settings.TELEGRAM_API_ID and settings.TELEGRAM_API_HASH:
+        s = (settings.TELEGRAM_SESSION_STRING or "").strip()
+        if s and not s.startswith("BQ") and settings.TELEGRAM_API_ID and settings.TELEGRAM_API_HASH:
             if not self._telethon_client:
-                session = StringSession(settings.TELEGRAM_SESSION_STRING.strip())
+                session = StringSession(s)
                 self._telethon_client = TelegramClient(
                     session,
                     int(settings.TELEGRAM_API_ID),
@@ -43,18 +74,29 @@ class TelegramPublisher:
         return None
 
     async def test_connection(self) -> Tuple[bool, str]:
-        """Test authentication with configured Telegram credentials."""
-        # 1. Test Telethon StringSession
-        client = await self._get_telethon_client()
-        if client:
+        """Test authentication with configured Telegram session or bot credentials."""
+        # 1. Pyrogram Test
+        if self._is_pyrogram_session():
             try:
+                client = await self._get_pyrogram_client()
+                if client:
+                    me = await client.get_me()
+                    name = getattr(me, "first_name", "") or getattr(me, "username", "User")
+                    return True, f"Pyrogram StringSession authenticated as: {name} (ID: {me.id})"
+            except Exception as e:
+                return False, f"Pyrogram StringSession failed: {str(e)}"
+
+        # 2. Telethon Test
+        try:
+            client = await self._get_telethon_client()
+            if client:
                 me = await client.get_me()
                 name = getattr(me, "first_name", "") or getattr(me, "username", "User")
                 return True, f"Telethon StringSession authenticated as: {name}"
-            except Exception as e:
-                return False, f"Telethon StringSession failed: {str(e)}"
+        except Exception as e:
+            pass
 
-        # 2. Test Bot Token Fallback
+        # 3. Bot Token Test
         if settings.TELEGRAM_BOT_TOKEN:
             try:
                 async with httpx.AsyncClient(timeout=10.0) as http_client:
@@ -67,7 +109,7 @@ class TelegramPublisher:
             except Exception as e:
                 return False, f"Bot API connection error: {str(e)}"
 
-        return False, "No Telegram credentials configured (provide TELEGRAM_SESSION_STRING or TELEGRAM_BOT_TOKEN)."
+        return False, "No Telegram credentials configured."
 
     async def publish_album(
         self,
@@ -77,40 +119,48 @@ class TelegramPublisher:
     ) -> Tuple[bool, List[int], Optional[str]]:
         """
         Publishes images as a native album post with caption to the target Telegram chat/channel.
-        Returns: (success, message_ids, error_message)
         """
         target_chat = chat_id or settings.TELEGRAM_CHAT_ID
         if not target_chat:
             return False, [], "No TELEGRAM_CHAT_ID configured in settings."
 
-        # Strategy 1: Telethon StringSession (User or Bot session)
-        telethon_client = await self._get_telethon_client()
-        if telethon_client:
+        # Engine 1: Pyrogram StringSession
+        if self._is_pyrogram_session():
             try:
-                logger.info(f"Uploading {len(image_paths)} images via Telethon StringSession to {target_chat}...")
+                client = await self._get_pyrogram_client()
+                if client:
+                    media_list = []
+                    for idx, p in enumerate(image_paths):
+                        if idx == 0:
+                            media_list.append(InputMediaPhoto(media=str(p), caption=caption, parse_mode=None))
+                        else:
+                            media_list.append(InputMediaPhoto(media=str(p)))
+
+                    sent_messages = await client.send_media_group(chat_id=target_chat, media=media_list)
+                    msg_ids = [m.id for m in sent_messages] if isinstance(sent_messages, list) else [sent_messages.id]
+                    logger.info(f"Successfully posted album via Pyrogram StringSession! Message IDs: {msg_ids}")
+                    return True, msg_ids, None
+            except Exception as e:
+                logger.error(f"Pyrogram publish error: {e}")
+
+        # Engine 2: Telethon StringSession
+        try:
+            telethon_client = await self._get_telethon_client()
+            if telethon_client:
                 file_paths = [str(p) for p in image_paths]
-                
-                # Telethon send_file with multiple files automatically creates an album
                 messages = await telethon_client.send_file(
                     target_chat,
                     file=file_paths,
                     caption=caption,
                     parse_mode="html"
                 )
-
-                msg_ids = []
-                if isinstance(messages, list):
-                    msg_ids = [m.id for m in messages]
-                elif hasattr(messages, "id"):
-                    msg_ids = [messages.id]
-
-                logger.info(f"Successfully posted album via StringSession! Message IDs: {msg_ids}")
+                msg_ids = [m.id for m in messages] if isinstance(messages, list) else [messages.id]
+                logger.info(f"Successfully posted album via Telethon StringSession! Message IDs: {msg_ids}")
                 return True, msg_ids, None
-            except Exception as e:
-                logger.error(f"Telethon StringSession publish error: {e}")
-                # Fall through to Bot API fallback if available
+        except Exception as e:
+            logger.error(f"Telethon publish error: {e}")
 
-        # Strategy 2: Telegram Bot API (sendMediaGroup)
+        # Engine 3: Bot API Fallback
         if settings.TELEGRAM_BOT_TOKEN:
             return await self._publish_via_bot_api(image_paths, caption, target_chat)
 
@@ -147,8 +197,7 @@ class TelegramPublisher:
                     data={"chat_id": chat_id, "media": json.dumps(media_json)},
                     files=files_dict
                 )
-                
-                # Close file handles
+
                 for f_tuple in files_dict.values():
                     try:
                         f_tuple[1].close()

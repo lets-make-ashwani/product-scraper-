@@ -1,11 +1,12 @@
 import os
+import tempfile
 from pathlib import Path
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # Server
-    HOST: str = "0.0.0.0"
+    HOST: str = "127.0.0.1"
     PORT: int = int(os.getenv("PORT", "8000"))
     DEBUG: bool = False
 
@@ -13,11 +14,11 @@ class Settings(BaseSettings):
     MONGODB_URI: str = "mongodb://localhost:27017"
     DATABASE_NAME: str = "product_scraper_db"
 
-    # Telegram Session Configuration (Telethon StringSession for Render 24/7 persistence)
+    # Telegram Session Configuration (Telethon StringSession)
     TELEGRAM_API_ID: Optional[int] = None
     TELEGRAM_API_HASH: Optional[str] = None
     TELEGRAM_SESSION_STRING: Optional[str] = None
-    TELEGRAM_BOT_TOKEN: Optional[str] = None  # Optional Bot API fallback
+    TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: str = ""
     TELEGRAM_ENABLED: bool = True
     TELEGRAM_CAPTION_TEMPLATE: str = (
@@ -42,8 +43,8 @@ class Settings(BaseSettings):
     AUTO_PUBLISH: bool = True
     HEADLESS_BROWSER: bool = True
 
-    # Ephemeral Staging Directory for Temp Images (Auto-deleted after Telegram upload)
-    TEMP_DIR: str = os.getenv("TEMP_DIR", "/tmp/product_scraper_staging")
+    # Cross-platform Ephemeral Temp Directory (Windows & Linux compatible)
+    TEMP_DIR: str = os.getenv("TEMP_DIR", os.path.join(tempfile.gettempdir(), "product_scraper_staging"))
 
     model_config = SettingsConfigDict(
         env_file=".env",
