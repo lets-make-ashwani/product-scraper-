@@ -18,6 +18,43 @@ class AmazonScraper(BaseScraper):
         netloc = urlparse(url.strip().lower()).netloc
         return "amazon.in" in netloc or "amazon.com" in netloc or "amzn.to" in netloc or "amzn.in" in netloc
 
+    def is_search_url(self, url: str) -> bool:
+        """Detect Amazon search query or category pages."""
+        if not url:
+            return False
+        clean = self.clean_generic_url(url)
+        has_asin = bool(re.search(r'/(?:dp|gp/product|d)/([A-Z0-9]{10})', clean))
+        return not has_asin or "/s?" in url or "k=" in url or "/s/" in url or "/b?" in url
+
+    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
+        logger.info(f"[Amazon] Unpacking search listing: {url}")
+        html, error = await self.fetch_page_html(url, wait_selector="div[data-component-type='s-search-result'], a[href*='/dp/']")
+        if error or not html:
+            logger.warning(f"[Amazon] Could not fetch search page: {error}")
+            return []
+
+        soup = BeautifulSoup(html, "html.parser")
+        product_links = []
+        seen = set()
+
+        anchors = soup.find_all("a", href=re.compile(r'/(?:dp|gp/product)/([A-Z0-9]{10})'))
+        for a in anchors:
+            href = a.get("href")
+            if not href:
+                continue
+            match = re.search(r'/(?:dp|gp/product)/([A-Z0-9]{10})', href)
+            if match:
+                asin = match.group(1)
+                clean_url = f"https://www.amazon.in/dp/{asin}"
+                if clean_url not in seen:
+                    seen.add(clean_url)
+                    product_links.append(clean_url)
+                    if len(product_links) >= max_items:
+                        break
+
+        logger.info(f"[Amazon] Discovered {len(product_links)} products from search page.")
+        return product_links
+
     def normalize_url(self, url: str) -> str:
         clean = self.clean_generic_url(url)
         # Extract ASIN (10 alphanumeric characters e.g. B08N5WRWNW)

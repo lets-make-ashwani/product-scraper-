@@ -18,6 +18,45 @@ class FlipkartScraper(BaseScraper):
         netloc = urlparse(url.strip().lower()).netloc
         return "flipkart.com" in netloc or "dl.flipkart.com" in netloc
 
+    def is_search_url(self, url: str) -> bool:
+        """Detect Flipkart search or category catalog URLs."""
+        if not url:
+            return False
+        u = url.lower()
+        return "/search" in u or "q=" in u or "/pr?sid=" in u or "otracker=" in u or "searchtype=" in u
+
+    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
+        """Loads Flipkart search page and unpacks all individual product links."""
+        logger.info(f"[Flipkart] Unpacking search listing: {url}")
+        html, error = await self.fetch_page_html(url, wait_selector="div._1YokD2, div._1AtVbE, a[href*='/p/']")
+        if error or not html:
+            logger.warning(f"[Flipkart] Could not fetch search page: {error}")
+            return []
+
+        soup = BeautifulSoup(html, "html.parser")
+        product_links = []
+        seen = set()
+
+        # Find all anchor tags pointing to /p/itm or containing pid=
+        anchors = soup.find_all("a", href=re.compile(r'/p/itm|pid='))
+        for a in anchors:
+            href = a.get("href")
+            if not href:
+                continue
+
+            full_url = f"https://www.flipkart.com{href}" if href.startswith("/") else href
+            norm = self.normalize_url(full_url)
+
+            # Validate that it is indeed a product link (must have /p/ or pid)
+            if ("/p/" in norm or "pid=" in norm) and "/search" not in norm and norm not in seen:
+                seen.add(norm)
+                product_links.append(norm)
+                if len(product_links) >= max_items:
+                    break
+
+        logger.info(f"[Flipkart] Discovered {len(product_links)} products from search page.")
+        return product_links
+
     def normalize_url(self, url: str) -> str:
         """Strip affiliate/query tokens and keep canonical path with pid."""
         parsed = urlparse(url.strip())

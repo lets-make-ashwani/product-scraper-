@@ -18,6 +18,41 @@ class MyntraScraper(BaseScraper):
         netloc = urlparse(url.strip().lower()).netloc
         return "myntra.com" in netloc
 
+    def is_search_url(self, url: str) -> bool:
+        """Detect Myntra category or search listing pages."""
+        if not url:
+            return False
+        clean = self.clean_generic_url(url)
+        is_pdp = bool(re.search(r'/\d+/buy', clean))
+        return not is_pdp or "/search" in url.lower() or "q=" in url.lower()
+
+    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
+        logger.info(f"[Myntra] Unpacking search listing: {url}")
+        html, error = await self.fetch_page_html(url, wait_selector="li.product-base, a[href*='/buy']")
+        if error or not html:
+            logger.warning(f"[Myntra] Could not fetch search page: {error}")
+            return []
+
+        soup = BeautifulSoup(html, "html.parser")
+        product_links = []
+        seen = set()
+
+        anchors = soup.find_all("a", href=re.compile(r'/\d+/buy'))
+        for a in anchors:
+            href = a.get("href")
+            if not href:
+                continue
+            full_url = f"https://www.myntra.com/{href.lstrip('/')}" if not href.startswith("http") else href
+            norm = self.normalize_url(full_url)
+            if norm and norm not in seen:
+                seen.add(norm)
+                product_links.append(norm)
+                if len(product_links) >= max_items:
+                    break
+
+        logger.info(f"[Myntra] Discovered {len(product_links)} products from search page.")
+        return product_links
+
     def normalize_url(self, url: str) -> str:
         clean = self.clean_generic_url(url)
         match = re.search(r'(https?://(?:www\.)?myntra\.com/[^?#]+/\d+/buy)', clean)
@@ -150,6 +185,5 @@ class MyntraScraper(BaseScraper):
         """Upgrades Myntra images to high-res WebP/JPG."""
         if not url:
             return ""
-        # Remove dynamic compression tokens like /f_webp,dpr_1.5,q_60,w_400,c_limit/
         clean = re.sub(r'/f_webp[^/]+/', '/h_1440,q_95,w_1080/', url.strip())
         return clean

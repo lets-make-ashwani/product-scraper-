@@ -1,7 +1,7 @@
 import re
 import logging
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from urllib.parse import urlparse, urlunparse
 from playwright.async_api import async_playwright, Browser, Page
 from app.models.product import UniversalProduct
@@ -28,6 +28,14 @@ class BaseScraper(ABC):
     async def extract_product(self, url: str) -> UniversalProduct:
         """Extract product metadata, images, and all color variants."""
         pass
+
+    def is_search_url(self, url: str) -> bool:
+        """Determine if the URL is a category or search listing instead of a single product."""
+        return False
+
+    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
+        """Extract individual product URLs from a search or category results page."""
+        return []
 
     async def fetch_page_html(self, url: str, wait_selector: Optional[str] = None) -> Tuple[str, Optional[str]]:
         """

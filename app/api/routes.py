@@ -16,7 +16,7 @@ def utc_now():
 
 @router.post("/products/import")
 async def import_urls(payload: URLImportRequest):
-    """Import URLs from Meesho, Flipkart, Myntra, or Amazon."""
+    """Import URLs from Meesho, Flipkart, Myntra, or Amazon (Supports both Single Products & Search/Category pages)."""
     db = get_database()
     if db is None:
         raise HTTPException(status_code=503, detail="MongoDB not connected.")
@@ -24,8 +24,8 @@ async def import_urls(payload: URLImportRequest):
     imported = []
     skipped = []
 
-    for url in payload.urls:
-        clean_url = url.strip()
+    for raw_url in payload.urls:
+        clean_url = raw_url.strip()
         if not clean_url:
             continue
 
@@ -34,45 +34,55 @@ async def import_urls(payload: URLImportRequest):
             skipped.append({"url": clean_url, "reason": "Unsupported platform"})
             continue
 
-        normalized_url = scraper.normalize_url(clean_url)
+        # Check if the URL is a Search or Category Listing
+        target_urls = [clean_url]
+        if scraper.is_search_url(clean_url):
+            discovered = await scraper.extract_search_product_urls(clean_url, max_items=40)
+            if not discovered:
+                skipped.append({"url": clean_url, "reason": "No products could be extracted from search listing"})
+                continue
+            target_urls = discovered
 
-        # Check existing
-        existing = await db.products.find_one({"normalized_url": normalized_url})
-        if existing:
-            skipped.append({"url": clean_url, "reason": "Already exists in database"})
-            continue
+        for product_url in target_urls:
+            normalized_url = scraper.normalize_url(product_url)
 
-        # Create initial product document
-        doc = {
-            "platform": scraper.platform_name,
-            "product_url": clean_url,
-            "normalized_url": normalized_url,
-            "title": f"Queued {scraper.platform_name.title()} Product",
-            "status": "PENDING",
-            "pricing": {},
-            "sizes": [],
-            "colors": [],
-            "primary_images": [],
-            "created_at": utc_now(),
-            "updated_at": utc_now()
-        }
+            # Check existing
+            existing = await db.products.find_one({"normalized_url": normalized_url})
+            if existing:
+                skipped.append({"url": product_url, "reason": "Already exists in database"})
+                continue
 
-        res = await db.products.insert_one(doc)
-        product_id = res.inserted_id
+            # Create initial product document
+            doc = {
+                "platform": scraper.platform_name,
+                "product_url": product_url,
+                "normalized_url": normalized_url,
+                "title": f"Queued {scraper.platform_name.title()} Product",
+                "status": "PENDING",
+                "pricing": {},
+                "sizes": [],
+                "colors": [],
+                "primary_images": [],
+                "created_at": utc_now(),
+                "updated_at": utc_now()
+            }
 
-        # Create background Job
-        job_doc = {
-            "product_id": str(product_id),
-            "job_type": "SCRAPE_AND_PUBLISH",
-            "status": "PENDING",
-            "attempts": 0,
-            "max_attempts": settings.MAX_JOB_ATTEMPTS,
-            "created_at": utc_now(),
-            "updated_at": utc_now()
-        }
-        await db.jobs.insert_one(job_doc)
+            res = await db.products.insert_one(doc)
+            product_id = res.inserted_id
 
-        imported.append({"id": str(product_id), "url": clean_url, "platform": scraper.platform_name})
+            # Create background Job
+            job_doc = {
+                "product_id": str(product_id),
+                "job_type": "SCRAPE_AND_PUBLISH",
+                "status": "PENDING",
+                "attempts": 0,
+                "max_attempts": settings.MAX_JOB_ATTEMPTS,
+                "created_at": utc_now(),
+                "updated_at": utc_now()
+            }
+            await db.jobs.insert_one(job_doc)
+
+            imported.append({"id": str(product_id), "url": product_url, "platform": scraper.platform_name})
 
     return {"imported": imported, "skipped": skipped, "total_imported": len(imported)}
 
