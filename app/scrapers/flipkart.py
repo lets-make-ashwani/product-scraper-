@@ -207,10 +207,7 @@ class FlipkartScraper(BaseScraper):
                     product.primary_images.append(high_res)
 
     def _parse_color_variants(self, soup: BeautifulSoup, product: UniversalProduct):
-        # Look for swatch color items
-        swatch_items = soup.find_all(lambda tag: tag.name in ['li', 'div'] and ('swatch' in tag.get('id', '').lower() or 'swatch' in tag.get('class', [''])[0].lower() or 'cd6vsq' in ' '.join(tag.get('class', [])).lower()))
-        
-        # Also look for images inside color containers
+        # Look for images inside color containers
         color_container = soup.find(string=re.compile(r'Selected Color|Color', re.I))
         if color_container:
             parent = color_container.find_parent("div")
@@ -230,6 +227,16 @@ class FlipkartScraper(BaseScraper):
 
         # Fallback to general swatches
         if not product.colors:
+            def is_swatch_tag(tag):
+                if not tag.name or tag.name not in ['li', 'div']:
+                    return False
+                t_id = tag.get('id') or ''
+                if 'swatch' in str(t_id).lower():
+                    return True
+                classes = ' '.join(tag.get('class') or []).lower()
+                return 'swatch' in classes or 'cd6vsq' in classes
+
+            swatch_items = soup.find_all(is_swatch_tag)
             for item in swatch_items:
                 img = item.find("img")
                 link = item.find("a")
