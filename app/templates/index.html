@@ -256,6 +256,9 @@
           <button onclick="toggleAutoScroll()" id="autoscroll-btn" class="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-emerald-400 border border-slate-700 rounded-lg text-[11px] font-mono flex items-center gap-1">
             <i class="fa-solid fa-arrow-down"></i> Auto-Scroll: ON
           </button>
+          <button onclick="copyTerminalLogs()" id="copy-terminal-btn" class="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-[11px] font-mono flex items-center gap-1" title="Copy all console logs to clipboard">
+            <i class="fa-solid fa-copy"></i> Copy Logs
+          </button>
           <button onclick="clearTerminalLogs()" class="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-[11px] font-mono flex items-center gap-1" title="Clear console buffer">
             <i class="fa-solid fa-trash-can"></i> Clear
           </button>
@@ -661,6 +664,58 @@
         screen.classList.add('h-64');
         btn.innerHTML = '<i class="fa-solid fa-expand"></i>';
       }
+    }
+
+    function copyTerminalLogs() {
+      const btn = document.getElementById('copy-terminal-btn');
+      if (!allLogsCache || allLogsCache.length === 0) {
+        if (btn) {
+          const old = btn.innerHTML;
+          btn.innerHTML = '<i class="fa-solid fa-circle-exclamation text-amber-400"></i> No logs yet';
+          setTimeout(() => { btn.innerHTML = old; }, 2000);
+        }
+        return;
+      }
+
+      const text = allLogsCache.map(l => {
+        const mod = (l.logger || '').replace('services.', '').replace('scraper.', '').toUpperCase();
+        return `[${l.timestamp}] [${mod}] [${l.level}] ${l.message}`;
+      }).join('\n');
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          showCopySuccess(btn);
+        }).catch(() => fallbackCopy(text, btn));
+      } else {
+        fallbackCopy(text, btn);
+      }
+    }
+
+    function fallbackCopy(text, btn) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showCopySuccess(btn);
+      } catch (err) {
+        alert('Could not copy logs automatically.');
+      }
+      document.body.removeChild(ta);
+    }
+
+    function showCopySuccess(btn) {
+      if (!btn) return;
+      const originalHtml = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-check text-emerald-400"></i> Copied!';
+      btn.classList.add('border-emerald-500/50', 'text-emerald-400');
+      setTimeout(() => {
+        btn.innerHTML = originalHtml;
+        btn.classList.remove('border-emerald-500/50', 'text-emerald-400');
+      }, 2500);
     }
 
     function setLogFilter(filter) {

@@ -48,37 +48,78 @@ class MyntraScraper(BaseScraper):
         return await super().fetch_page_html(url, wait_selector=wait_selector)
 
     async def extract_search_catalog(self, url: str, max_items: int = 40) -> List[Dict[str, Any]]:
-        """Extract full product URLs from Myntra category or search listing."""
+        """Extract full product catalog with titles, prices, and 5 images from Myntra category/search listing."""
         logger.info(f"[Myntra] Unpacking search listing: {url}")
         html, error = await self.fetch_page_html(url)
         if error or not html:
             logger.warning(f"[Myntra] Could not fetch search page: {error}")
             return []
 
-        pattern = re.compile(r'https?://(?:www\.)?myntra\.com/[^"\'<>\s]+?/\d+/buy', re.I)
-        raw_urls = pattern.findall(html)
         products = []
         seen = set()
 
-        for u in raw_urls:
-            norm_url = self.normalize_url(u)
-            if norm_url in seen:
-                continue
-            seen.add(norm_url)
+        # 1. Primary: Extract rich product cards from window.__myx script
+        idx = html.find("window.__myx")
+        if idx != -1:
+            try:
+                start_pos = html.find("{", idx)
+                d, _ = json.JSONDecoder().raw_decode(html, start_pos)
+                raw_prods = d.get("searchData", {}).get("results", {}).get("products", [])
+                for p in raw_prods:
+                    landing = p.get("landingPageUrl")
+                    if not landing:
+                        continue
+                    full_url = f"https://www.myntra.com/{landing.lstrip('/')}" if not landing.startswith("http") else landing
+                    norm_url = self.normalize_url(full_url)
+                    if norm_url in seen:
+                        continue
+                    seen.add(norm_url)
 
-            slug_match = re.search(r'myntra\.com/(?:[^/]+/)*([^/?#]+)/\d+/buy', norm_url)
-            title = slug_match.group(1).replace('-', ' ').title() if slug_match else "Myntra Product"
+                    # Extract up to 5 high-res images
+                    raw_imgs = []
+                    for img in p.get("images", []):
+                        if isinstance(img, dict) and img.get("src"):
+                            raw_imgs.append(img.get("src"))
+                    if not raw_imgs and p.get("searchImage"):
+                        raw_imgs.append(p.get("searchImage"))
+                    hi_res_imgs = [self._upgrade_image_url(u) for u in raw_imgs if u][:5]
 
-            products.append({
-                "product_url": norm_url,
-                "title": title,
-                "brand": None,
-                "deal_price": None,
-                "mrp": None,
-                "primary_images": []
-            })
-            if len(products) >= max_items:
-                break
+                    products.append({
+                        "product_url": norm_url,
+                        "title": p.get("productName") or p.get("product") or "Myntra Product",
+                        "brand": p.get("brand"),
+                        "deal_price": float(p["price"]) if p.get("price") is not None else None,
+                        "mrp": float(p["mrp"]) if p.get("mrp") is not None else None,
+                        "primary_images": hi_res_imgs
+                    })
+                    if len(products) >= max_items:
+                        break
+            except Exception as e:
+                logger.warning(f"[Myntra] Error decoding __myx in search listing: {e}")
+
+        # 2. Fallback: Regex scan for both relative and absolute /buy product URLs
+        if not products:
+            matches = re.findall(r'(?:https?://(?:www\.)?myntra\.com)?(/[a-zA-Z0-9_/-]+/\d+/buy)', html, re.I)
+            for m in matches:
+                full_url = f"https://www.myntra.com{m}" if m.startswith("/") else m
+                norm_url = self.normalize_url(full_url)
+                if norm_url in seen:
+                    continue
+                seen.add(norm_url)
+
+                slug_match = re.search(r'myntra\.com/(?:[^/]+/)*([^/?#]+)/\d+/buy', norm_url)
+                title = slug_match.group(1).replace('-', ' ').title() if slug_match else "Myntra Product"
+
+                products.append({
+                    "product_url": norm_url,
+                    "title": title,
+                    "brand": None,
+                    "deal_price": None,
+                    "mrp": None,
+                    "primary_images": []
+                })
+                if len(products) >= max_items:
+                    break
 
         logger.info(f"[Myntra] Discovered {len(products)} products from search listing.")
         return products

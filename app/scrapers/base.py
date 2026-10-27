@@ -15,6 +15,13 @@ class BaseScraper(ABC):
     """Abstract Base Class for E-commerce Platform Scrapers."""
 
     platform_name: str = "generic"
+    custom_user_agent: Optional[str] = None
+
+    def get_user_agent(self) -> str:
+        return self.custom_user_agent or (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
 
     @abstractmethod
     def can_handle(self, url: str) -> bool:
@@ -53,11 +60,7 @@ class BaseScraper(ABC):
         # 1. Fast HTTP attempt
         try:
             headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
+                "User-Agent": self.get_user_agent(),
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
                 "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
                 "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
@@ -70,9 +73,11 @@ class BaseScraper(ABC):
             }
             async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
                 resp = await client.get(url, headers=headers)
-                if resp.status_code == 200 and len(resp.text) > 10000:
-                    text_lower = resp.text.lower()
-                    if "captcha" not in text_lower and "access denied" not in text_lower:
+                if resp.status_code == 200 and len(resp.text) > 4000:
+                    title_match = re.search(r'<title[^>]*>(.*?)</title>', resp.text, re.I)
+                    title_text = title_match.group(1).lower() if title_match else ""
+                    is_block = any(b in title_text for b in ["access denied", "security check", "robot or human", "just a moment", "blocked", "captcha"])
+                    if not is_block:
                         logger.info(f"[{self.platform_name}] Fast HTTP fetched {len(resp.text)} bytes successfully.")
                         return resp.text, None
                 elif resp.status_code == 429:
@@ -97,11 +102,7 @@ class BaseScraper(ABC):
             )
 
             context = await browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                ),
+                user_agent=self.get_user_agent(),
                 viewport={"width": 1920, "height": 1080},
                 locale="en-US"
             )

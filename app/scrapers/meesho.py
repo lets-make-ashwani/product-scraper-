@@ -12,6 +12,7 @@ logger = logging.getLogger("scraper.meesho")
 
 class MeeshoScraper(BaseScraper):
     platform_name = "meesho"
+    custom_user_agent = "Meesho/14.8.1 (com.meesho.supply; build:14810; Android 14)"
 
     def can_handle(self, url: str) -> bool:
         if not url:
@@ -28,7 +29,7 @@ class MeeshoScraper(BaseScraper):
     async def fetch_page_html(self, url: str, wait_selector: Optional[str] = None) -> Tuple[str, Optional[str]]:
         """Direct fast fetch with Meesho App User-Agent and geolocation headers."""
         headers = {
-            "User-Agent": "Meesho/14.8.1 (com.meesho.supply; build:14810; Android 14)",
+            "User-Agent": self.custom_user_agent,
             "X-Forwarded-For": "103.211.205.10",
             "X-Real-IP": "103.211.205.10",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -37,8 +38,10 @@ class MeeshoScraper(BaseScraper):
         try:
             async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, http2=False) as client:
                 resp = await client.get(url, headers=headers)
-                if resp.status_code == 200 and len(resp.text) > 5000:
-                    if "access denied" not in resp.text.lower() and "edgesuite.net" not in resp.text.lower():
+                if resp.status_code == 200 and len(resp.text) > 4000:
+                    title_match = re.search(r'<title[^>]*>(.*?)</title>', resp.text, re.I)
+                    title_text = title_match.group(1).lower() if title_match else ""
+                    if "access denied" not in title_text and "edgesuite.net" not in resp.text.lower():
                         return resp.text, None
         except Exception as e:
             logger.debug(f"[Meesho] Fast fetch notice: {e}")
@@ -56,48 +59,99 @@ class MeeshoScraper(BaseScraper):
             logger.warning(f"[Meesho] Could not fetch listing page: {error}")
             return []
 
-        soup = BeautifulSoup(html, "html.parser")
         products = []
         seen = set()
 
-        anchors = soup.find_all("a", href=re.compile(r'/p/[a-zA-Z0-9]+|/s/p-[a-zA-Z0-9]+'))
-        for a in anchors:
-            href = a.get("href")
-            if not href:
-                continue
-            full_url = f"https://www.meesho.com{href}" if href.startswith("/") else href
-            norm_url = self.normalize_url(full_url)
-            if norm_url in seen or "/search" in norm_url:
-                continue
-            seen.add(norm_url)
+        # 1. Primary: Parse Next.js Hydration data (__NEXT_DATA__)
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+            next_script = soup.find("script", id="__NEXT_DATA__")
+            if next_script and next_script.string:
+                data = json.loads(next_script.string)
+                init = data.get("props", {}).get("pageProps", {}).get("initialState", {})
+                listing_obj = (
+                    init.get("plpListing", {}).get("listing", {}) or
+                    init.get("searchListing", {}).get("listing", {}) or
+                    init.get("clpListing", {}).get("listing", {}) or
+                    init.get("collectionListing", {}).get("listing", {})
+                )
+                prods_pages = listing_obj.get("products", [])
+                for page_data in prods_pages:
+                    for p in page_data.get("products", []):
+                        slug = p.get("slug") or p.get("original_slug")
+                        pid = p.get("product_id") or p.get("id")
+                        if slug and pid:
+                            clean_slug = slug.strip("/")
+                            if "/p/" in clean_slug:
+                                p_url = f"https://www.meesho.com/{clean_slug}"
+                            else:
+                                p_url = f"https://www.meesho.com/{clean_slug}/p/{pid}"
+                        elif pid:
+                            p_url = f"https://www.meesho.com/s/p-{pid}"
+                        else:
+                            continue
 
-            # Title
-            title_text = a.get_text(separator=' ', strip=True)
-            clean_title = re.sub(r'^\+\s*\d+\s*More\s*(?:\d+h\s*:\s*\d+m\s*:\s*\d+s)?', '', title_text).strip()
-            clean_title = clean_title.split("₹")[0].strip() or "Meesho Product"
+                        norm_url = self.normalize_url(p_url)
+                        if norm_url in seen:
+                            continue
+                        seen.add(norm_url)
 
-            # Prices
-            prices = [re.sub(r'[^0-9.]', '', p) for p in re.findall(r'₹\s*([0-9,]+)', title_text)]
-            valid_prices = [float(p) for p in prices if p and p.replace('.', '', 1).isdigit()]
-            deal_price = valid_prices[0] if valid_prices else None
-            mrp = valid_prices[1] if len(valid_prices) > 1 else None
+                        raw_imgs = p.get("images", []) or ([p.get("image")] if p.get("image") else [])
+                        hi_imgs = [self._upgrade_image_url(u) for u in raw_imgs if u][:5]
 
-            # Cover Image
-            img = a.find("img")
-            img_src = img.get("src") if img else None
-            high_res = self._upgrade_image_url(img_src) if img_src else ""
+                        products.append({
+                            "product_url": norm_url,
+                            "title": p.get("hero_product_name") or p.get("name") or "Meesho Product",
+                            "brand": None,
+                            "deal_price": float(p["min_product_price"]) if p.get("min_product_price") else (float(p["min_catalog_price"]) if p.get("min_catalog_price") else (float(p["price"]) if p.get("price") else None)),
+                            "mrp": float(p["original_price"]) if p.get("original_price") else (float(p["mrp"]) if p.get("mrp") else None),
+                            "primary_images": hi_imgs
+                        })
+                        if len(products) >= max_items:
+                            break
+                    if len(products) >= max_items:
+                        break
+        except Exception as e:
+            logger.warning(f"[Meesho] Error parsing __NEXT_DATA__ in search catalog: {e}")
 
-            products.append({
-                "product_url": norm_url,
-                "title": clean_title,
-                "brand": None,
-                "deal_price": deal_price,
-                "mrp": mrp,
-                "primary_images": [high_res] if high_res else []
-            })
+        # 2. Fallback: Parse HTML DOM Anchor Tags
+        if not products:
+            soup = BeautifulSoup(html, "html.parser")
+            anchors = soup.find_all("a", href=re.compile(r'/p/[a-zA-Z0-9]+|/s/p-[a-zA-Z0-9]+'))
+            for a in anchors:
+                href = a.get("href")
+                if not href:
+                    continue
+                full_url = f"https://www.meesho.com{href}" if href.startswith("/") else href
+                norm_url = self.normalize_url(full_url)
+                if norm_url in seen or "/search" in norm_url:
+                    continue
+                seen.add(norm_url)
 
-            if len(products) >= max_items:
-                break
+                title_text = a.get_text(separator=' ', strip=True)
+                clean_title = re.sub(r'^\+\s*\d+\s*More\s*(?:\d+h\s*:\s*\d+m\s*:\s*\d+s)?', '', title_text).strip()
+                clean_title = clean_title.split("₹")[0].strip() or "Meesho Product"
+
+                prices = [re.sub(r'[^0-9.]', '', p) for p in re.findall(r'₹\s*([0-9,]+)', title_text)]
+                valid_prices = [float(p) for p in prices if p and p.replace('.', '', 1).isdigit()]
+                deal_price = valid_prices[0] if valid_prices else None
+                mrp = valid_prices[1] if len(valid_prices) > 1 else None
+
+                img = a.find("img")
+                img_src = img.get("src") if img else None
+                high_res = self._upgrade_image_url(img_src) if img_src else ""
+
+                products.append({
+                    "product_url": norm_url,
+                    "title": clean_title,
+                    "brand": None,
+                    "deal_price": deal_price,
+                    "mrp": mrp,
+                    "primary_images": [high_res] if high_res else []
+                })
+
+                if len(products) >= max_items:
+                    break
 
         logger.info(f"[Meesho] Discovered {len(products)} products from listing.")
         return products
