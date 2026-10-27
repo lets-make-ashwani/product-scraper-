@@ -86,6 +86,7 @@ class BaseScraper(ABC):
             browser: Browser = await p.chromium.launch(
                 headless=settings.HEADLESS_BROWSER,
                 args=[
+                    "--disable-blink-features=AutomationControlled",
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",

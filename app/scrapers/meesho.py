@@ -26,21 +26,27 @@ class MeeshoScraper(BaseScraper):
         return "/search" in u or "/category/" in u or "/pl/" in u or "q=" in u or "searchtype=" in u
 
     async def fetch_page_html(self, url: str, wait_selector: Optional[str] = None) -> Tuple[str, Optional[str]]:
-        """Direct fast fetch with Meesho App User-Agent to bypass Akamai WAF."""
+        """Direct fast fetch with Meesho App User-Agent and geolocation headers."""
         headers = {
             "User-Agent": "Meesho/14.8.1 (com.meesho.supply; build:14810; Android 14)",
+            "X-Forwarded-For": "103.211.205.10",
+            "X-Real-IP": "103.211.205.10",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9"
+            "Accept-Language": "en-US,en;q=0.9,hi;q=0.8"
         }
         try:
             async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, http2=False) as client:
                 resp = await client.get(url, headers=headers)
                 if resp.status_code == 200 and len(resp.text) > 5000:
-                    return resp.text, None
+                    if "access denied" not in resp.text.lower() and "edgesuite.net" not in resp.text.lower():
+                        return resp.text, None
         except Exception as e:
             logger.debug(f"[Meesho] Fast fetch notice: {e}")
 
-        return await super().fetch_page_html(url, wait_selector=wait_selector)
+        html, err = await super().fetch_page_html(url, wait_selector=wait_selector)
+        if html and ("access denied" in html.lower() or "edgesuite.net" in html.lower()):
+            return "", "Akamai Access Denied on cloud host IP"
+        return html, err
 
     async def extract_search_catalog(self, url: str, max_items: int = 40) -> List[Dict[str, Any]]:
         """Extract full product cards (URL, title, price, images) from a Meesho listing or search page."""
@@ -144,7 +150,12 @@ class MeeshoScraper(BaseScraper):
         if not product.title or product.title == "Meesho Product":
             title_tag = soup.find("h1") or soup.find("title")
             if title_tag:
-                product.title = title_tag.get_text(strip=True)
+                t = title_tag.get_text(strip=True)
+                if t.lower() not in ["access denied", "403 forbidden", "error"]:
+                    product.title = t
+
+        if product.title.lower() in ["access denied", "403 forbidden", "error"]:
+            raise RuntimeError(f"Invalid product title received from CDN: {product.title}")
 
         return product
 
