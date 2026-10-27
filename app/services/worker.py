@@ -83,12 +83,17 @@ class BackgroundWorker:
 
             url = product_doc["product_url"]
 
-            # 1. Scrape product & all color variants (with catalog failsafe)
+            # 1. Scrape product & all color variants (with retry & catalog failsafe)
+            product = None
             try:
-                product: UniversalProduct = await scraper_router.scrape(url)
+                product = await scraper_router.scrape(url)
             except Exception as scrape_err:
-                logger.warning(f"Product page scrape encountered issue: {scrape_err}")
-                product = None
+                logger.warning(f"Initial scrape for {url} encountered issue: {scrape_err}. Retrying in 3.5s...")
+                await asyncio.sleep(3.5)
+                try:
+                    product = await scraper_router.scrape(url)
+                except Exception as retry_err:
+                    logger.warning(f"Retry scrape also failed: {retry_err}")
 
             # Failsafe: if individual page scrape was blocked or returned no images, use catalog pre-extracted data
             if not product or not product.primary_images:

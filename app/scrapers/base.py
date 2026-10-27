@@ -1,5 +1,6 @@
 import re
 import logging
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple, List
 from urllib.parse import urlparse, urlunparse
@@ -74,6 +75,9 @@ class BaseScraper(ABC):
                     if "captcha" not in text_lower and "access denied" not in text_lower:
                         logger.info(f"[{self.platform_name}] Fast HTTP fetched {len(resp.text)} bytes successfully.")
                         return resp.text, None
+                elif resp.status_code == 429:
+                    logger.warning(f"[{self.platform_name}] Fast HTTP received 429 rate limit. Backing off 3.5s before fallback...")
+                    await asyncio.sleep(3.5)
         except Exception as e:
             logger.debug(f"[{self.platform_name}] Fast HTTP attempt bypassed: {e}")
 

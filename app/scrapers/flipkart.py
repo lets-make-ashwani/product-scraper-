@@ -1,6 +1,8 @@
 import json
 import re
 import logging
+import asyncio
+import httpx
 from bs4 import BeautifulSoup
 from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse, parse_qs, unquote
@@ -111,9 +113,187 @@ class FlipkartScraper(BaseScraper):
             return f"https://www.flipkart.com{clean_path}?pid={pid}"
         return f"https://www.flipkart.com{clean_path}"
 
+    async def _extract_via_rome_api(self, url: str) -> Optional[UniversalProduct]:
+        """
+        Fast Rome API extractor: queries Flipkart's internal single-page-app API.
+        Extracts up to 10-18 high-resolution 1664x1664 gallery images, prices, titles, and sizes.
+        Bypasses standard HTML blocks and browser overhead.
+        """
+        try:
+            parsed = urlparse(url.strip())
+            qs = parse_qs(parsed.query)
+            pid = qs.get("pid", [None])[0]
+
+            page_uri = parsed.path
+            if pid:
+                page_uri += f"?pid={pid}"
+
+            api_url = "https://2.rome.api.flipkart.com/api/4/page/fetch"
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "X-User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 FKUA/website/42/website/Desktop"
+                ),
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Referer": "https://www.flipkart.com/"
+            }
+
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                res = await client.post(api_url, json={"pageUri": page_uri}, headers=headers)
+                if res.status_code != 200:
+                    logger.debug(f"[Flipkart] Rome API returned status {res.status_code}")
+                    return None
+
+                data = res.json()
+                raw_text = json.dumps(data)
+
+                # 1. Gallery Images (1664x1664 high-resolution)
+                img_pattern = re.compile(
+                    r'https?://[^\s"\'<>]+?\.flixcart\.com/image/[^\s"\'<>]+?\.(?:jpeg|jpg|png|webp)',
+                    re.I
+                )
+                raw_imgs = img_pattern.findall(raw_text)
+                gallery_images = []
+                for img in raw_imgs:
+                    if "cms-rpd-images" in img or "icon" in img.lower() or "placeholder" in img.lower():
+                        continue
+                    high = self._upgrade_image_url(img)
+                    if high and high not in gallery_images:
+                        gallery_images.append(high)
+
+                if not gallery_images:
+                    return None
+
+                # 2. Title & Brand
+                title = None
+                brand = None
+                slots = data.get("RESPONSE", {}).get("slots", [])
+                for s in slots:
+                    w = s.get("widget", {})
+                    w_data = w.get("data", {})
+                    dls = json.dumps(w_data)
+
+                    # Title search
+                    if not title:
+                        m_title = re.search(r'"(?:superTitle|title)":\s*\{"text":\s*"([^"]+)"\}', dls)
+                        if m_title and len(m_title.group(1)) > 3:
+                            title = m_title.group(1)
+
+                    # Brand search
+                    if not brand:
+                        m_brand = re.search(r'"brand":\s*\{"text":\s*"([^"]+)"\}', dls)
+                        if m_brand:
+                            brand = m_brand.group(1)
+
+                if not title:
+                    slug_match = re.search(r'flipkart\.com/([^/?#]+)/p/', url)
+                    if slug_match:
+                        title = unquote(slug_match.group(1).replace('-', ' ')).title()
+                    else:
+                        title = "Flipkart Product"
+
+                if brand and brand.lower() not in title.lower():
+                    title = f"{brand} {title}".strip()
+
+                product = UniversalProduct(
+                    platform=self.platform_name,
+                    product_url=url,
+                    normalized_url=self.normalize_url(url),
+                    title=title,
+                    brand=brand,
+                    primary_images=gallery_images[:10]
+                )
+
+                # 3. Prices
+                found_price = False
+                for s in slots:
+                    w = s.get("widget", {})
+                    dls_data = w.get("data", {}).get("dlsData", {})
+                    pd = dls_data.get("price_description_0", {}).get("value", {})
+                    if pd:
+                        l2 = str(pd.get("label_2", {}))
+                        m2 = re.search(r'₹\s*([0-9,]+)', l2)
+                        if m2:
+                            product.pricing.deal_price = float(m2.group(1).replace(",", ""))
+                            found_price = True
+
+                        l1 = str(pd.get("label_1", {}))
+                        m1 = re.search(r'([0-9,]+)', l1)
+                        if m1:
+                            product.pricing.mrp = float(m1.group(1).replace(",", ""))
+
+                        l0 = str(pd.get("label_0", {}))
+                        m0 = re.search(r'([0-9]+)\s*%', l0)
+                        if m0:
+                            product.pricing.discount_percent = int(m0.group(1))
+                        break
+
+                if not found_price:
+                    prices = [re.sub(r'[^0-9.]', '', p) for p in re.findall(r'₹\s*([0-9,]+)', raw_text)]
+                    valid_prices = [float(p) for p in prices if p and p.replace('.', '', 1).isdigit() and float(p) > 50]
+                    if valid_prices:
+                        product.pricing.deal_price = min(valid_prices)
+                        higher_prices = [p for p in valid_prices if p > product.pricing.deal_price]
+                        if higher_prices:
+                            product.pricing.mrp = max(higher_prices)
+                            product.pricing.discount_percent = int(
+                                round((product.pricing.mrp - product.pricing.deal_price) / product.pricing.mrp * 100)
+                            )
+
+                # 4. Rating
+                m_avg = re.search(r'"average":\s*([0-9.]+)', raw_text)
+                m_cnt = re.search(r'"ratingCount":\s*([0-9]+)', raw_text)
+                if m_avg:
+                    try:
+                        product.rating = ProductRating(
+                            score=float(m_avg.group(1)),
+                            review_count=int(m_cnt.group(1)) if m_cnt else None
+                        )
+                    except Exception:
+                        pass
+
+                # 5. Color variants
+                v_matches = re.findall(r'"url":\s*"(/[^"]*?[?&]pid=[^"]+)"', raw_text)
+                seen_variants = set()
+                for v_path in v_matches:
+                    v_url = f"https://www.flipkart.com{v_path}"
+                    norm_v = self.normalize_url(v_url)
+                    if norm_v != product.normalized_url and norm_v not in seen_variants:
+                        seen_variants.add(norm_v)
+                        c_match = re.search(r'flipkart\.com/([^/?#]+)/p/', norm_v)
+                        c_name = unquote(c_match.group(1).replace('-', ' ')).title() if c_match else f"Color {len(product.colors)+1}"
+                        product.colors.append(ColorVariant(
+                            color_name=c_name,
+                            variant_url=norm_v,
+                            image_urls=[]
+                        ))
+                    if len(product.colors) >= 8:
+                        break
+
+                logger.info(f"[Flipkart] Rome API extracted {len(product.primary_images)} gallery images and ₹{product.pricing.deal_price} for '{product.title[:35]}...'")
+                return product
+
+        except Exception as e:
+            logger.debug(f"[Flipkart] Rome API parsing error: {e}")
+            return None
+
     async def extract_product(self, url: str) -> UniversalProduct:
         normalized_url = self.normalize_url(url)
-        # Wait for price or title to ensure JavaScript hydration completes
+
+        # 1. High-speed Rome API attempt (retrieves all 10-18 gallery images without HTML blocks)
+        try:
+            rome_prod = await self._extract_via_rome_api(normalized_url)
+            if rome_prod and len(rome_prod.primary_images) >= 1:
+                return rome_prod
+        except Exception as e:
+            logger.debug(f"[Flipkart] Rome API fast extraction bypassed: {e}")
+
+        # 2. Fallback to full HTML fetch & DOM parsing
         html, error = await self.fetch_page_html(normalized_url, wait_selector="div.Nx9bqj, div._30jeq3, h1, span.VU-ZEz, span.B_NuCI")
         if error or not html:
             raise RuntimeError(f"Failed to load Flipkart product: {error}")
@@ -317,4 +497,5 @@ class FlipkartScraper(BaseScraper):
         clean = url.strip().replace("&amp;", "&")
         if clean.startswith("//"):
             clean = "https:" + clean
-        return re.sub(r'/image/\d+/\d+/', r'/image/1664/1664/', clean)
+        clean = clean.replace("{@width}", "1664").replace("{@height}", "1664").replace("{@quality}", "90")
+        return re.sub(r'/image/[^/]+/[^/]+/', r'/image/1664/1664/', clean)

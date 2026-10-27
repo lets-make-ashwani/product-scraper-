@@ -49,7 +49,8 @@ class TelegramPublisher:
                     session_string=settings.TELEGRAM_SESSION_STRING.strip(),
                     api_id=int(settings.TELEGRAM_API_ID),
                     api_hash=settings.TELEGRAM_API_HASH.strip(),
-                    in_memory=True
+                    in_memory=True,
+                    no_updates=True
                 )
                 await self._pyrogram_client.start()
                 logger.info("Connected to Telegram using Pyrogram StringSession.")
