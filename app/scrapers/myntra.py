@@ -1,8 +1,9 @@
 import json
 import re
 import logging
+import httpx
 from bs4 import BeautifulSoup
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from urllib.parse import urlparse
 from app.scrapers.base import BaseScraper
 from app.models.product import UniversalProduct, ColorVariant, ProductPricing, ProductRating
@@ -26,32 +27,65 @@ class MyntraScraper(BaseScraper):
         is_pdp = bool(re.search(r'/\d+/buy', clean))
         return not is_pdp or "/search" in url.lower() or "q=" in url.lower()
 
-    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
+    async def fetch_page_html(self, url: str, wait_selector: Optional[str] = None) -> Tuple[str, Optional[str]]:
+        """Fast HTTP/1.1 fetch to avoid Akamai HTTP/2 protocol resets."""
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, http2=False) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 200 and len(resp.text) > 5000:
+                    return resp.text, None
+        except Exception as e:
+            logger.debug(f"[Myntra] Fast HTTP fetch notice: {e}")
+
+        return await super().fetch_page_html(url, wait_selector=wait_selector)
+
+    async def extract_search_catalog(self, url: str, max_items: int = 40) -> List[Dict[str, Any]]:
+        """Extract full product URLs from Myntra category or search listing."""
         logger.info(f"[Myntra] Unpacking search listing: {url}")
-        html, error = await self.fetch_page_html(url, wait_selector="li.product-base, a[href*='/buy']")
+        html, error = await self.fetch_page_html(url)
         if error or not html:
             logger.warning(f"[Myntra] Could not fetch search page: {error}")
             return []
 
-        soup = BeautifulSoup(html, "html.parser")
-        product_links = []
+        pattern = re.compile(r'https?://(?:www\.)?myntra\.com/[^"\'<>\s]+?/\d+/buy', re.I)
+        raw_urls = pattern.findall(html)
+        products = []
         seen = set()
 
-        anchors = soup.find_all("a", href=re.compile(r'/\d+/buy'))
-        for a in anchors:
-            href = a.get("href")
-            if not href:
+        for u in raw_urls:
+            norm_url = self.normalize_url(u)
+            if norm_url in seen:
                 continue
-            full_url = f"https://www.myntra.com/{href.lstrip('/')}" if not href.startswith("http") else href
-            norm = self.normalize_url(full_url)
-            if norm and norm not in seen:
-                seen.add(norm)
-                product_links.append(norm)
-                if len(product_links) >= max_items:
-                    break
+            seen.add(norm_url)
 
-        logger.info(f"[Myntra] Discovered {len(product_links)} products from search page.")
-        return product_links
+            slug_match = re.search(r'myntra\.com/(?:[^/]+/)*([^/?#]+)/\d+/buy', norm_url)
+            title = slug_match.group(1).replace('-', ' ').title() if slug_match else "Myntra Product"
+
+            products.append({
+                "product_url": norm_url,
+                "title": title,
+                "brand": None,
+                "deal_price": None,
+                "mrp": None,
+                "primary_images": []
+            })
+            if len(products) >= max_items:
+                break
+
+        logger.info(f"[Myntra] Discovered {len(products)} products from search listing.")
+        return products
+
+    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
+        items = await self.extract_search_catalog(url, max_items=max_items)
+        return [i["product_url"] for i in items]
 
     def normalize_url(self, url: str) -> str:
         clean = self.clean_generic_url(url)
@@ -74,8 +108,8 @@ class MyntraScraper(BaseScraper):
             title="Myntra Product"
         )
 
-        # 1. Parse window.__myx script
-        pdp_data = self._extract_myx_data(soup)
+        # 1. Parse window.__myx script from HTML
+        pdp_data = self._extract_myx_data(html)
         if pdp_data:
             self._parse_pdp_data(pdp_data, product)
 
@@ -85,20 +119,16 @@ class MyntraScraper(BaseScraper):
 
         return product
 
-    def _extract_myx_data(self, soup: BeautifulSoup) -> Optional[Dict[str, Any]]:
-        scripts = soup.find_all("script")
-        for s in scripts:
-            text = s.get_text()
-            if text and "window.__myx =" in text:
-                try:
-                    match = re.search(r'window\.__myx\s*=\s*({.*?});?</script>', text, re.DOTALL)
-                    if not match:
-                        match = re.search(r'window\.__myx\s*=\s*({.*?});', text, re.DOTALL)
-                    if match:
-                        data = json.loads(match.group(1))
-                        return data.get("pdpData", {})
-                except Exception as e:
-                    logger.warning(f"[Myntra] Failed to parse __myx: {e}")
+    def _extract_myx_data(self, html_text: str) -> Optional[Dict[str, Any]]:
+        idx = html_text.find("window.__myx")
+        if idx != -1:
+            try:
+                start_pos = html_text.find("{", idx)
+                decoder = json.JSONDecoder()
+                data, _ = decoder.raw_decode(html_text, start_pos)
+                return data.get("pdpData", {})
+            except Exception as e:
+                logger.warning(f"[Myntra] Failed to raw_decode __myx: {e}")
         return None
 
     def _parse_pdp_data(self, pdp: Dict[str, Any], product: UniversalProduct):
@@ -136,7 +166,7 @@ class MyntraScraper(BaseScraper):
         sizes_raw = pdp.get("sizes", [])
         product.sizes = [s.get("label") for s in sizes_raw if isinstance(s, dict) and s.get("label")]
 
-        # Primary Images from Media Albums
+        # Primary Images from Media Albums (up to 5 images)
         albums = pdp.get("media", {}).get("albums", [])
         for album in albums:
             images = album.get("images", [])
@@ -146,6 +176,10 @@ class MyntraScraper(BaseScraper):
                     high_res = self._upgrade_image_url(src)
                     if high_res not in product.primary_images:
                         product.primary_images.append(high_res)
+                if len(product.primary_images) >= 5:
+                    break
+            if len(product.primary_images) >= 5:
+                break
 
         # Colorways / Variants
         style_options = pdp.get("styleOptions", []) or pdp.get("colours", [])
@@ -186,8 +220,14 @@ class MyntraScraper(BaseScraper):
                 pass
 
     def _upgrade_image_url(self, url: str) -> str:
-        """Upgrades Myntra images to high-res WebP/JPG."""
+        """Upgrades Myntra images to high-res 1440x1080."""
         if not url:
             return ""
-        clean = re.sub(r'/f_webp[^/]+/', '/h_1440,q_95,w_1080/', url.strip())
+        clean = url.strip()
+        if clean.startswith("//"):
+            clean = "https:" + clean
+        elif clean.startswith("http://"):
+            clean = "https://" + clean[7:]
+        clean = clean.replace("($height)", "1440").replace("($width)", "1080").replace("($qualityPercentage)", "95")
+        clean = re.sub(r'/f_webp[^/]+/', '/h_1440,q_95,w_1080/', clean)
         return clean

@@ -1,8 +1,9 @@
 import json
 import re
 import logging
+import httpx
 from bs4 import BeautifulSoup
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from urllib.parse import urlparse
 from app.scrapers.base import BaseScraper
 from app.models.product import UniversalProduct, ColorVariant, ProductPricing, ProductRating
@@ -22,58 +23,82 @@ class MeeshoScraper(BaseScraper):
         if not url:
             return False
         u = url.lower()
-        return "/search" in u or "/category/" in u or "q=" in u or "searchtype=" in u
+        return "/search" in u or "/category/" in u or "/pl/" in u or "q=" in u or "searchtype=" in u
 
-    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
-        logger.info(f"[Meesho] Unpacking search listing: {url}")
+    async def fetch_page_html(self, url: str, wait_selector: Optional[str] = None) -> Tuple[str, Optional[str]]:
+        """Direct fast fetch with Meesho App User-Agent to bypass Akamai WAF."""
+        headers = {
+            "User-Agent": "Meesho/14.8.1 (com.meesho.supply; build:14810; Android 14)",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, http2=False) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 200 and len(resp.text) > 5000:
+                    return resp.text, None
+        except Exception as e:
+            logger.debug(f"[Meesho] Fast fetch notice: {e}")
+
+        return await super().fetch_page_html(url, wait_selector=wait_selector)
+
+    async def extract_search_catalog(self, url: str, max_items: int = 40) -> List[Dict[str, Any]]:
+        """Extract full product cards (URL, title, price, images) from a Meesho listing or search page."""
+        logger.info(f"[Meesho] Unpacking search catalog: {url}")
         html, error = await self.fetch_page_html(url)
         if error or not html:
-            logger.warning(f"[Meesho] Could not fetch search page: {error}")
+            logger.warning(f"[Meesho] Could not fetch listing page: {error}")
             return []
 
         soup = BeautifulSoup(html, "html.parser")
-        product_links = []
+        products = []
         seen = set()
 
-        # 1. Check Next.js state for catalogs
-        next_script = soup.find("script", id="__NEXT_DATA__")
-        if next_script and next_script.string:
-            try:
-                data = json.loads(next_script.string)
-                props = data.get("props", {}).get("pageProps", {})
-                catalogs = props.get("initialState", {}).get("search", {}).get("catalogs", [])
-                if not catalogs:
-                    catalogs = props.get("catalogs", [])
+        anchors = soup.find_all("a", href=re.compile(r'/p/[a-zA-Z0-9]+|/s/p-[a-zA-Z0-9]+'))
+        for a in anchors:
+            href = a.get("href")
+            if not href:
+                continue
+            full_url = f"https://www.meesho.com{href}" if href.startswith("/") else href
+            norm_url = self.normalize_url(full_url)
+            if norm_url in seen or "/search" in norm_url:
+                continue
+            seen.add(norm_url)
 
-                for cat in catalogs:
-                    cid = cat.get("id") or cat.get("catalog_id")
-                    if cid:
-                        p_url = f"https://www.meesho.com/s/p-{cid}"
-                        if p_url not in seen:
-                            seen.add(p_url)
-                            product_links.append(p_url)
-                            if len(product_links) >= max_items:
-                                break
-            except Exception as e:
-                logger.warning(f"[Meesho] Error parsing search Next.js data: {e}")
+            # Title
+            title_text = a.get_text(separator=' ', strip=True)
+            clean_title = re.sub(r'^\+\s*\d+\s*More\s*(?:\d+h\s*:\s*\d+m\s*:\s*\d+s)?', '', title_text).strip()
+            clean_title = clean_title.split("₹")[0].strip() or "Meesho Product"
 
-        # 2. Check DOM anchor links
-        if len(product_links) < max_items:
-            anchors = soup.find_all("a", href=re.compile(r'/p/[a-zA-Z0-9]+|/s/p-[a-zA-Z0-9]+'))
-            for a in anchors:
-                href = a.get("href")
-                if not href:
-                    continue
-                full_url = f"https://www.meesho.com{href}" if href.startswith("/") else href
-                norm = self.normalize_url(full_url)
-                if norm not in seen and "/search" not in norm:
-                    seen.add(norm)
-                    product_links.append(norm)
-                    if len(product_links) >= max_items:
-                        break
+            # Prices
+            prices = [re.sub(r'[^0-9.]', '', p) for p in re.findall(r'₹\s*([0-9,]+)', title_text)]
+            valid_prices = [float(p) for p in prices if p and p.replace('.', '', 1).isdigit()]
+            deal_price = valid_prices[0] if valid_prices else None
+            mrp = valid_prices[1] if len(valid_prices) > 1 else None
 
-        logger.info(f"[Meesho] Discovered {len(product_links)} products from search page.")
-        return product_links
+            # Cover Image
+            img = a.find("img")
+            img_src = img.get("src") if img else None
+            high_res = self._upgrade_image_url(img_src) if img_src else ""
+
+            products.append({
+                "product_url": norm_url,
+                "title": clean_title,
+                "brand": None,
+                "deal_price": deal_price,
+                "mrp": mrp,
+                "primary_images": [high_res] if high_res else []
+            })
+
+            if len(products) >= max_items:
+                break
+
+        logger.info(f"[Meesho] Discovered {len(products)} products from listing.")
+        return products
+
+    async def extract_search_product_urls(self, url: str, max_items: int = 40) -> List[str]:
+        items = await self.extract_search_catalog(url, max_items=max_items)
+        return [i["product_url"] for i in items]
 
     def normalize_url(self, url: str) -> str:
         """Extract canonical product URL (e.g. https://www.meesho.com/name/p/123456)."""
@@ -103,9 +128,10 @@ class MeeshoScraper(BaseScraper):
 
         # 1. Next.js Hydration Data
         next_script = soup.find("script", id="__NEXT_DATA__")
-        if next_script and next_script.string:
+        raw_json = next_script.get_text(strip=True) if next_script else None
+        if raw_json:
             try:
-                data = json.loads(next_script.string)
+                data = json.loads(raw_json)
                 self._parse_next_data(data, product)
             except Exception as e:
                 logger.warning(f"[Meesho] Next.js parsing warning: {e}")
@@ -168,9 +194,9 @@ class MeeshoScraper(BaseScraper):
                 review_count=int(review_cnt) if review_cnt else None
             )
 
-        # Primary Images
+        # Primary Images (up to 5 images)
         raw_images = p_data.get("images") or p_data.get("media") or []
-        for img in raw_images:
+        for img in raw_images[:5]:
             url_str = img if isinstance(img, str) else img.get("url")
             if url_str:
                 high_res = self._upgrade_image_url(url_str)
