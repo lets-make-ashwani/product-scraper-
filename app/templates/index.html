@@ -583,10 +583,12 @@
       const input = document.getElementById('url-input');
       const btn = document.getElementById('import-btn');
       const msg = document.getElementById('import-msg');
-      const urls = input.value.split('\n').map(u => u.trim()).filter(Boolean);
+      // Extract all valid http/https URLs across newlines, spaces, or pasted notes
+      const matches = input.value.match(/https?:\/\/[^\s,]+/g);
+      const urls = matches ? Array.from(new Set(matches.map(u => u.trim()))) : [];
 
       if (urls.length === 0) {
-        alert('Please enter at least one product URL.');
+        alert('Please enter at least one valid product or search URL.');
         return;
       }
 

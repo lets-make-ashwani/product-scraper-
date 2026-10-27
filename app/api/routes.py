@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from typing import List, Optional
 from bson import ObjectId
@@ -25,11 +26,18 @@ async def import_urls(payload: URLImportRequest):
     imported = []
     skipped = []
 
-    for raw_url in payload.urls:
-        clean_url = raw_url.strip()
-        if not clean_url:
+    # Cleanly expand URLs even if pasted across newlines, spaces, or with comments
+    expanded_urls = []
+    for raw_item in payload.urls:
+        if not raw_item:
             continue
+        parts = re.findall(r'https?://[^\s,]+', raw_item.strip())
+        if parts:
+            expanded_urls.extend(parts)
+        elif raw_item.strip().startswith("http"):
+            expanded_urls.append(raw_item.strip())
 
+    for clean_url in expanded_urls:
         scraper = scraper_router.get_scraper(clean_url)
         if not scraper:
             skipped.append({"url": clean_url, "reason": "Unsupported platform"})
