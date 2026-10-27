@@ -38,7 +38,7 @@ class Settings(BaseSettings):
 
     # Scraper & Worker
     REQUEST_DELAY_SECONDS: float = 4.5
-    MAX_IMAGES_PER_PRODUCT: int = 10
+    MAX_IMAGES_PER_PRODUCT: int = 5
     MAX_JOB_ATTEMPTS: int = 3
     AUTO_PUBLISH: bool = True
     HEADLESS_BROWSER: bool = True

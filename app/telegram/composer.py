@@ -57,7 +57,7 @@ class TelegramComposer:
         return body + link_block
 
     @staticmethod
-    def select_variant_images(product: UniversalProduct, max_images: int = 10) -> List[str]:
+    def select_variant_images(product: UniversalProduct, max_images: int = 5) -> List[str]:
         """
         Gathers images from primary product and each color variant.
         Evenly balances pictures across color variants to produce a single merged album.

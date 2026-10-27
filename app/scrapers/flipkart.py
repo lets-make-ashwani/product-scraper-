@@ -206,7 +206,7 @@ class FlipkartScraper(BaseScraper):
                     normalized_url=self.normalize_url(url),
                     title=title,
                     brand=brand,
-                    primary_images=gallery_images[:10]
+                    primary_images=gallery_images[:5]
                 )
 
                 # 3. Prices
@@ -443,7 +443,7 @@ class FlipkartScraper(BaseScraper):
                 high_res = self._upgrade_image_url(m)
                 if high_res and high_res not in product.primary_images:
                     product.primary_images.append(high_res)
-                if len(product.primary_images) >= 10:
+                if len(product.primary_images) >= 5:
                     break
 
     def _parse_color_variants(self, soup: BeautifulSoup, product: UniversalProduct):

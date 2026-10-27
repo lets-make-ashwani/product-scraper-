@@ -35,9 +35,9 @@ services:
       - key: AUTO_PUBLISH
         value: "True"
       - key: REQUEST_DELAY_SECONDS
-        value: "2.0"
+        value: "4.5"
       - key: MAX_IMAGES_PER_PRODUCT
-        value: "10"
+        value: "5"
       - key: HEADLESS_BROWSER
         value: "True"
       - key: TEMP_DIR

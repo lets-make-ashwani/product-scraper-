@@ -132,8 +132,12 @@ class BackgroundWorker:
                     # Select representative photos across color variants (up to max limit)
                     selected_img_urls = telegram_composer.select_variant_images(product, max_images=settings.MAX_IMAGES_PER_PRODUCT)
                     
-                    # Download images temporarily to Render disk
-                    downloaded_files = await image_service.download_images(selected_img_urls, staging_dir)
+                    # Download images temporarily to Render disk (strict 5-image cap)
+                    downloaded_files = await image_service.download_images(
+                        selected_img_urls,
+                        staging_dir,
+                        max_images=settings.MAX_IMAGES_PER_PRODUCT
+                    )
                     
                     # Generate Base Caption and enhance via Groq AI if enabled
                     base_caption = telegram_composer.compose_caption(product)

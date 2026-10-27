@@ -25,7 +25,7 @@ class EphemeralImageService:
         staging_dir.mkdir(parents=True, exist_ok=True)
         return staging_dir
 
-    async def download_images(self, urls: List[str], staging_dir: Path, max_images: int = 10) -> List[Path]:
+    async def download_images(self, urls: List[str], staging_dir: Path, max_images: int = 5) -> List[Path]:
         """
         Downloads up to max_images to the ephemeral staging folder.
         Validates image integrity via PIL.
