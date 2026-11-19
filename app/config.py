@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     AUTO_PUBLISH: bool = True
     HEADLESS_BROWSER: bool = True
 
+    # 24/7 Autonomous Discovery Engine
+    AUTOPILOT_ENABLED: bool = True
+    AUTOPILOT_INTERVAL_MINUTES: int = 20
+    AUTOPILOT_MAX_PAGES_PER_RUN: int = 3
+    AUTOPILOT_ITEMS_PER_CATEGORY: int = 20
+
     # Cross-platform Ephemeral Temp Directory (Windows & Linux compatible)
     TEMP_DIR: str = os.getenv("TEMP_DIR", os.path.join(tempfile.gettempdir(), "product_scraper_staging"))
 

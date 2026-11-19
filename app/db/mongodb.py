@@ -27,6 +27,7 @@ async def connect_to_mongo():
 
         # Ensure Indexes
         await mongodb.db.products.create_index("normalized_url", unique=True)
+        await mongodb.db.products.create_index([("platform", 1), ("external_id", 1)])
         await mongodb.db.products.create_index("platform")
         await mongodb.db.products.create_index("status")
         await mongodb.db.products.create_index("created_at")
@@ -35,6 +36,7 @@ async def connect_to_mongo():
         await mongodb.db.jobs.create_index("created_at")
         await mongodb.db.jobs.create_index("product_id")
 
+        await mongodb.db.autopilot_state.create_index("key", unique=True)
         await mongodb.db.logs.create_index("created_at")
         logger.info("MongoDB collections and indexes initialized successfully.")
 

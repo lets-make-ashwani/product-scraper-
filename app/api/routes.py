@@ -1,6 +1,8 @@
 import re
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional
+from urllib.parse import urlparse, parse_qs
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, Query
 from app.db.mongodb import get_database
@@ -9,6 +11,7 @@ from app.scrapers.router import scraper_router
 from app.telegram.client import telegram_publisher
 from app.services.ai_service import ai_service
 from app.services.log_stream import terminal_logger_handler
+from app.services.autopilot import autopilot_engine
 from app.config import settings
 
 router = APIRouter(prefix="/api", tags=["API"])
@@ -54,7 +57,16 @@ async def import_urls(payload: URLImportRequest):
                 product_url = item["product_url"]
                 normalized_url = scraper.normalize_url(product_url)
 
-                existing = await db.products.find_one({"normalized_url": normalized_url})
+                # Extract external_id (e.g. Flipkart PID)
+                parsed = urlparse(normalized_url)
+                qs = parse_qs(parsed.query)
+                pid = qs.get("pid", [None])[0]
+
+                query_filters = [{"normalized_url": normalized_url}]
+                if pid:
+                    query_filters.append({"platform": scraper.platform_name, "external_id": pid})
+
+                existing = await db.products.find_one({"$or": query_filters})
                 if existing:
                     skipped.append({"url": product_url, "reason": "Already exists in database"})
                     continue
@@ -63,6 +75,7 @@ async def import_urls(payload: URLImportRequest):
                     "platform": scraper.platform_name,
                     "product_url": product_url,
                     "normalized_url": normalized_url,
+                    "external_id": pid,
                     "title": item.get("title") or f"Queued {scraper.platform_name.title()} Product",
                     "brand": item.get("brand"),
                     "status": "PENDING",
@@ -98,8 +111,17 @@ async def import_urls(payload: URLImportRequest):
             product_url = clean_url
             normalized_url = scraper.normalize_url(product_url)
 
+            # Extract external_id
+            parsed = urlparse(normalized_url)
+            qs = parse_qs(parsed.query)
+            pid = qs.get("pid", [None])[0]
+
+            query_filters = [{"normalized_url": normalized_url}]
+            if pid:
+                query_filters.append({"platform": scraper.platform_name, "external_id": pid})
+
             # Check existing
-            existing = await db.products.find_one({"normalized_url": normalized_url})
+            existing = await db.products.find_one({"$or": query_filters})
             if existing:
                 skipped.append({"url": product_url, "reason": "Already exists in database"})
                 continue
@@ -109,6 +131,7 @@ async def import_urls(payload: URLImportRequest):
                 "platform": scraper.platform_name,
                 "product_url": product_url,
                 "normalized_url": normalized_url,
+                "external_id": pid,
                 "title": f"Queued {scraper.platform_name.title()} Product",
                 "status": "PENDING",
                 "pricing": {},
@@ -368,6 +391,48 @@ async def get_stats():
         "groq_ai_enabled": bool(settings.GROQ_API_KEY and settings.AI_ENHANCE_POSTS),
         "telegram_channel": settings.TELEGRAM_CHAT_ID
     }
+
+@router.get("/autopilot/status")
+async def get_autopilot_status():
+    """Get the current state and metrics of the 24/7 Autonomous Discovery Engine."""
+    db = get_database()
+    if db is None:
+        return {"enabled": False, "status": "OFFLINE"}
+
+    state = await db.autopilot_state.find_one({"key": "global_state"}) or {}
+    state.pop("_id", None)
+    return {
+        "engine_running": autopilot_engine.is_running,
+        "config_enabled": settings.AUTOPILOT_ENABLED,
+        "state": state
+    }
+
+@router.post("/autopilot/toggle")
+async def toggle_autopilot(payload: dict):
+    """Enable or pause the 24/7 Autonomous Discovery Engine."""
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database offline")
+
+    enable = bool(payload.get("enable", True))
+    await db.autopilot_state.update_one(
+        {"key": "global_state"},
+        {"$set": {"enabled": enable, "updated_at": utc_now()}},
+        upsert=True
+    )
+
+    if enable and not autopilot_engine.is_running:
+        autopilot_engine.start()
+    elif not enable and autopilot_engine.is_running:
+        autopilot_engine.stop()
+
+    return {"success": True, "autopilot_enabled": enable}
+
+@router.post("/autopilot/trigger")
+async def trigger_autopilot_now():
+    """Manually trigger one full discovery cycle immediately."""
+    asyncio.create_task(autopilot_engine.run_discovery_cycle())
+    return {"success": True, "message": "Autonomous discovery sweep triggered in background."}
 
 @router.post("/telegram/test")
 async def test_telegram():

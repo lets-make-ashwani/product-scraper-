@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from app.config import settings
 from app.db.mongodb import connect_to_mongo, close_mongo_connection, get_database
 from app.services.worker import worker
+from app.services.autopilot import autopilot_engine
 from app.api.routes import router as api_router
 from app.services.log_stream import setup_terminal_logging
 
@@ -29,9 +30,11 @@ async def lifespan(app: FastAPI):
     settings.ensure_temp_dir()
     await connect_to_mongo()
     worker.start()
+    autopilot_engine.start()
     yield
     # Shutdown
     logger.info("Universal Product Scraper shutting down...")
+    autopilot_engine.stop()
     worker.stop()
     await close_mongo_connection()
 

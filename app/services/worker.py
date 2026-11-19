@@ -81,6 +81,29 @@ class BackgroundWorker:
             if not product_doc:
                 raise ValueError(f"Product {product_id} not found in database.")
 
+            # DUPLICATE PROTECTION: Verify product hasn't already been published
+            norm_url = product_doc.get("normalized_url")
+            ext_id = product_doc.get("external_id")
+            dup_query = [{"status": "PUBLISHED", "normalized_url": norm_url}]
+            if ext_id:
+                dup_query.append({"status": "PUBLISHED", "platform": product_doc.get("platform"), "external_id": ext_id})
+            
+            existing_published = await db.products.find_one({
+                "_id": {"$ne": product_doc["_id"]},
+                "$or": dup_query
+            })
+            if existing_published:
+                logger.info(f"Duplicate product detected during worker execution: {norm_url}. Skipping job {job_id} safely.")
+                await db.products.update_one(
+                    {"_id": product_doc["_id"]},
+                    {"$set": {"status": "SKIPPED_DUPLICATE", "updated_at": utc_now()}}
+                )
+                await db.jobs.update_one(
+                    {"_id": job_id},
+                    {"$set": {"status": "COMPLETED", "result": "SKIPPED_DUPLICATE", "updated_at": utc_now()}}
+                )
+                return
+
             url = product_doc["product_url"]
 
             # 1. Scrape product & all color variants (with retry & catalog failsafe)

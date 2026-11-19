@@ -48,11 +48,18 @@
             <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
               Universal Scraper & Telegram Engine
             </h1>
-            <p class="text-xs md:text-sm text-slate-400 mt-0.5">Multi-Platform (Meesho • Flipkart • Myntra • Amazon) with Color Variant Merger & Groq AI</p>
+            <p class="text-xs md:text-sm text-slate-400 mt-0.5">24/7 Auto-Pilot Discovery • Flipkart Dresses • Zero-Duplicate Engine • Groq AI</p>
           </div>
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2.5">
+        <button id="autopilot-toggle-btn" onclick="toggleAutopilot()" class="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold rounded-xl transition border border-emerald-500/30 flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="autopilot-status-text">Auto-Pilot: ON</span>
+        </button>
+        <button onclick="triggerAutopilotNow()" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-700/80 flex items-center gap-2" title="Trigger immediate scan of Flipkart dresses">
+          <i class="fa-solid fa-radar text-amber-400"></i> Scan Now
+        </button>
         <button onclick="testAi()" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-700/80 flex items-center gap-2">
           <i class="fa-solid fa-brain text-purple-400"></i> Test Groq AI
         </button>
@@ -62,12 +69,6 @@
         <a id="channel-pill" href="https://t.me/autoforwardlink" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 transition">
           <i class="fa-brands fa-telegram"></i> <span id="channel-name">@autoforwardlink</span>
         </a>
-        <span id="ai-badge" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">
-          <i class="fa-solid fa-wand-magic-sparkles text-purple-400"></i> Groq AI Active
-        </span>
-        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> 24/7 Render Active
-        </span>
       </div>
     </header>
 
@@ -143,12 +144,12 @@
         <div id="import-msg" class="hidden text-xs p-3 rounded-xl"></div>
 
         <div class="pt-3 border-t border-slate-800 text-[11px] text-slate-400 space-y-2">
-          <p class="font-semibold text-slate-300">Autonomous Features Active:</p>
+          <p class="font-semibold text-slate-300">24/7 Auto-Pilot Safeguards:</p>
           <ul class="space-y-1.5 text-slate-400">
-            <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Search Catalog Auto-Unpacking (up to 40 items/link)</li>
-            <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Color Variant Merging into 1 Telegram Album</li>
-            <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Groq AI Copywriting + Guaranteed Clickable Links</li>
-            <li class="flex items-center gap-2"><i class="fa-solid fa-check text-emerald-400"></i> Instant Disk Clean: 0 MB storage footprint on Render</li>
+            <li class="flex items-center gap-2"><i class="fa-solid fa-robot text-purple-400"></i> Auto-Scrapes all Flipkart Dress Categories 24/7</li>
+            <li class="flex items-center gap-2"><i class="fa-solid fa-shield-halved text-emerald-400"></i> Zero-Duplicate Guarantee (Canonical URL & PID Check)</li>
+            <li class="flex items-center gap-2"><i class="fa-solid fa-images text-sky-400"></i> Strict 5-Image Gallery Cap per Telegram Album</li>
+            <li class="flex items-center gap-2"><i class="fa-solid fa-broom text-cyan-400"></i> 0 MB Disk Footprint: Images purged immediately</li>
           </ul>
         </div>
       </div>
@@ -811,13 +812,77 @@
       }
     }
 
+    // ==========================================
+    // Auto-Pilot Controls
+    // ==========================================
+    let isAutopilotOn = true;
+
+    async function fetchAutopilotStatus() {
+      try {
+        const res = await fetch('/api/autopilot/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        const enabled = data.state && data.state.enabled !== undefined ? data.state.enabled : data.config_enabled;
+        isAutopilotOn = enabled;
+        updateAutopilotUI(enabled);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function updateAutopilotUI(enabled) {
+      const btn = document.getElementById('autopilot-toggle-btn');
+      const text = document.getElementById('autopilot-status-text');
+      if (!btn || !text) return;
+
+      if (enabled) {
+        text.innerText = 'Auto-Pilot: ON';
+        btn.className = 'px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold rounded-xl transition border border-emerald-500/30 flex items-center gap-2';
+        btn.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> <span id="autopilot-status-text">Auto-Pilot: ON</span>';
+      } else {
+        text.innerText = 'Auto-Pilot: PAUSED';
+        btn.className = 'px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-semibold rounded-xl transition border border-amber-500/30 flex items-center gap-2';
+        btn.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400"></span> <span id="autopilot-status-text">Auto-Pilot: PAUSED</span>';
+      }
+    }
+
+    async function toggleAutopilot() {
+      try {
+        const nextState = !isAutopilotOn;
+        const res = await fetch('/api/autopilot/toggle', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({enable: nextState})
+        });
+        const data = await res.json();
+        if (data.success) {
+          isAutopilotOn = nextState;
+          updateAutopilotUI(isAutopilotOn);
+        }
+      } catch (e) {
+        alert('Could not toggle Auto-Pilot: ' + e);
+      }
+    }
+
+    async function triggerAutopilotNow() {
+      try {
+        const res = await fetch('/api/autopilot/trigger', { method: 'POST' });
+        const data = await res.json();
+        alert(data.message || 'Auto-Pilot discovery scan triggered!');
+      } catch (e) {
+        alert('Error triggering scan: ' + e);
+      }
+    }
+
     // Initial load
     loadData(false);
     fetchLogs();
+    fetchAutopilotStatus();
 
     // Intervals
     setInterval(() => loadData(false), 4000);
     setInterval(fetchLogs, 1500);
+    setInterval(fetchAutopilotStatus, 10000);
   </script>
 </body>
 </html>

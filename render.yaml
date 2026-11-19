@@ -29,7 +29,7 @@ services:
       - key: GROQ_API_KEY
         sync: false
       - key: GROQ_MODEL
-        value: llama-3.3-70b-versatile
+        value: qwen/qwen3.8-27b
       - key: AI_ENHANCE_POSTS
         value: "True"
       - key: AUTO_PUBLISH
@@ -40,5 +40,9 @@ services:
         value: "5"
       - key: HEADLESS_BROWSER
         value: "True"
+      - key: AUTOPILOT_ENABLED
+        value: "True"
+      - key: AUTOPILOT_INTERVAL_MINUTES
+        value: "20"
       - key: TEMP_DIR
         value: /tmp/product_scraper_staging
