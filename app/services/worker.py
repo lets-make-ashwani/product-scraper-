@@ -138,6 +138,10 @@ class BackgroundWorker:
                     if pre_pricing.get("deal_price") and not product.pricing.deal_price:
                         product.pricing.deal_price = pre_pricing.get("deal_price")
                         product.pricing.mrp = pre_pricing.get("mrp")
+                        if product.pricing.mrp and product.pricing.deal_price and product.pricing.mrp > product.pricing.deal_price:
+                            product.pricing.discount_percent = int(
+                                round((product.pricing.mrp - product.pricing.deal_price) / product.pricing.mrp * 100)
+                            )
 
             if not product:
                 raise ValueError("Could not scrape product and no catalog fallback available.")
@@ -162,9 +166,8 @@ class BackgroundWorker:
                         max_images=settings.MAX_IMAGES_PER_PRODUCT
                     )
                     
-                    # Generate Base Caption and enhance via Groq AI if enabled
-                    base_caption = telegram_composer.compose_caption(product)
-                    final_caption = await ai_service.enhance_caption(product, base_caption)
+                    # Generate Full Structured Caption with Complete Details (matching Image 1)
+                    final_caption = telegram_composer.compose_caption(product)
 
                     # Post to Telegram
                     if downloaded_files:

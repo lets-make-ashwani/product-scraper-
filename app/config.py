@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # Groq AI Configuration
     GROQ_API_KEY: Optional[str] = None
     GROQ_MODEL: str = "qwen/qwen3.8-27b"
-    AI_ENHANCE_POSTS: bool = True
+    AI_ENHANCE_POSTS: bool = False
 
     # Scraper & Worker
     REQUEST_DELAY_SECONDS: float = 4.5

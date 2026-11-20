@@ -57,9 +57,8 @@ async def run_batch():
             print(f"  • Price: ₹{product.pricing.deal_price} (MRP: ₹{product.pricing.mrp})")
             print(f"  • Colors Found: {len(product.colors)} | Primary Images: {len(product.primary_images)}")
 
-            # 2. Generate Groq AI Caption
-            base_caption = telegram_composer.compose_caption(product)
-            caption = await ai_service.enhance_caption(product, base_caption)
+            # 2. Generate Full Structured Caption (Image 1 format)
+            caption = telegram_composer.compose_caption(product)
 
             # 3. Ephemeral Image Staging
             staging_dir = image_service.create_staging_dir(f"batch_{idx}")
