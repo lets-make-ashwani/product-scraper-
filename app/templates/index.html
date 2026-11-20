@@ -53,10 +53,16 @@
         </div>
       </div>
       <div class="flex flex-wrap items-center gap-2.5">
-        <button id="autopilot-toggle-btn" onclick="toggleAutopilot()" class="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold rounded-xl transition border border-emerald-500/30 flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span id="autopilot-status-text">Auto-Pilot: ON</span>
+        <button id="autopilot-start-btn" onclick="setAutopilotState(true)" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition shadow-md shadow-emerald-500/20 flex items-center gap-1.5">
+          <i class="fa-solid fa-play"></i> Start Automation
         </button>
+        <button id="autopilot-stop-btn" onclick="setAutopilotState(false)" class="px-3.5 py-1.5 bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition shadow-md shadow-rose-500/20 flex items-center gap-1.5">
+          <i class="fa-solid fa-pause"></i> Stop Automation
+        </button>
+        <span id="autopilot-badge" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="autopilot-status-text">Status: Running</span>
+        </span>
         <button onclick="triggerAutopilotNow()" class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition border border-slate-700/80 flex items-center gap-2" title="Trigger immediate scan of Flipkart dresses">
           <i class="fa-solid fa-radar text-amber-400"></i> Scan Now
         </button>
@@ -831,36 +837,41 @@
     }
 
     function updateAutopilotUI(enabled) {
-      const btn = document.getElementById('autopilot-toggle-btn');
+      const badge = document.getElementById('autopilot-badge');
       const text = document.getElementById('autopilot-status-text');
-      if (!btn || !text) return;
+      const startBtn = document.getElementById('autopilot-start-btn');
+      const stopBtn = document.getElementById('autopilot-stop-btn');
+      if (!badge || !text) return;
 
       if (enabled) {
-        text.innerText = 'Auto-Pilot: ON';
-        btn.className = 'px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold rounded-xl transition border border-emerald-500/30 flex items-center gap-2';
-        btn.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> <span id="autopilot-status-text">Auto-Pilot: ON</span>';
+        text.innerText = 'Automation: Running';
+        badge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30';
+        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> <span id="autopilot-status-text">Automation: Running</span>';
+        if (startBtn) startBtn.classList.add('opacity-50', 'pointer-events-none');
+        if (stopBtn) stopBtn.classList.remove('opacity-50', 'pointer-events-none');
       } else {
-        text.innerText = 'Auto-Pilot: PAUSED';
-        btn.className = 'px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-xs font-semibold rounded-xl transition border border-amber-500/30 flex items-center gap-2';
-        btn.innerHTML = '<span class="w-2 h-2 rounded-full bg-amber-400"></span> <span id="autopilot-status-text">Auto-Pilot: PAUSED</span>';
+        text.innerText = 'Automation: Stopped';
+        badge.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30';
+        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-400"></span> <span id="autopilot-status-text">Automation: Stopped</span>';
+        if (startBtn) startBtn.classList.remove('opacity-50', 'pointer-events-none');
+        if (stopBtn) stopBtn.classList.add('opacity-50', 'pointer-events-none');
       }
     }
 
-    async function toggleAutopilot() {
+    async function setAutopilotState(enable) {
       try {
-        const nextState = !isAutopilotOn;
         const res = await fetch('/api/autopilot/toggle', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({enable: nextState})
+          body: JSON.stringify({enable: enable})
         });
         const data = await res.json();
         if (data.success) {
-          isAutopilotOn = nextState;
+          isAutopilotOn = enable;
           updateAutopilotUI(isAutopilotOn);
         }
       } catch (e) {
-        alert('Could not toggle Auto-Pilot: ' + e);
+        alert('Could not update Automation state: ' + e);
       }
     }
 

@@ -43,6 +43,13 @@ class TelegramPublisher:
         if not PYROGRAM_AVAILABLE:
             return None
         if self._is_pyrogram_session() and settings.TELEGRAM_API_ID and settings.TELEGRAM_API_HASH:
+            if self._pyrogram_client is not None and not getattr(self._pyrogram_client, "is_connected", False):
+                try:
+                    await self._pyrogram_client.stop()
+                except Exception:
+                    pass
+                self._pyrogram_client = None
+
             if not self._pyrogram_client:
                 self._pyrogram_client = PyrogramClient(
                     "user_session",
@@ -143,6 +150,10 @@ class TelegramPublisher:
                     return True, msg_ids, None
             except Exception as e:
                 logger.error(f"Pyrogram publish error: {e}")
+                err_msg = str(e)
+                # If transport / connection broke, reset client so next attempt reconnects cleanly
+                if "TCPTransport" in err_msg or "closed" in err_msg or "Connection" in err_msg:
+                    self._pyrogram_client = None
 
         # Engine 2: Telethon StringSession
         try:
