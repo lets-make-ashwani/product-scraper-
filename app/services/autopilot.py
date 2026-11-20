@@ -165,15 +165,48 @@ class AutopilotEngine:
                         pid = qs.get("pid", [None])[0]
 
                         # STRICT DEDUPLICATION CHECK:
-                        # 1. Check normalized URL
-                        # 2. Check external_id (PID)
+                        # 1. Skip if product was already PUBLISHED (zero Telegram duplicates!)
+                        # 2. Skip if product is currently PENDING or PROCESSING in queue
                         query_filters = [{"normalized_url": norm_url}]
                         if pid:
                             query_filters.append({"platform": "flipkart", "external_id": pid})
 
-                        existing = await db.products.find_one({"$or": query_filters})
-                        if existing:
+                        existing_active = await db.products.find_one({
+                            "$or": query_filters,
+                            "status": {"$in": ["PUBLISHED", "PENDING", "PROCESSING"]}
+                        })
+                        if existing_active:
                             total_skipped_duplicates += 1
+                            continue
+
+                        # Check if product previously FAILED (e.g. temporary network error or image timeout)
+                        # If found again, REVIVE it for a fresh publishing attempt!
+                        failed_existing = await db.products.find_one({
+                            "$or": query_filters,
+                            "status": "FAILED"
+                        })
+                        if failed_existing:
+                            logger.info(f"[AutoPilot] Rediscovered previously failed product {pid or norm_url}. Reviving for Telegram publishing!")
+                            await db.products.update_one(
+                                {"_id": failed_existing["_id"]},
+                                {"$set": {
+                                    "status": "PENDING",
+                                    "error_message": None,
+                                    "primary_images": item.get("primary_images", failed_existing.get("primary_images", [])),
+                                    "updated_at": utc_now()
+                                }}
+                            )
+                            await db.jobs.update_one(
+                                {"product_id": str(failed_existing["_id"])},
+                                {"$set": {
+                                    "status": "PENDING",
+                                    "attempts": 0,
+                                    "error_message": None,
+                                    "updated_at": utc_now()
+                                }},
+                                upsert=True
+                            )
+                            total_new_enqueued += 1
                             continue
 
                         # New unique product found! Create product and job document

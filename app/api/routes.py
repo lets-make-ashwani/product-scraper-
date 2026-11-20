@@ -68,7 +68,20 @@ async def import_urls(payload: URLImportRequest):
 
                 existing = await db.products.find_one({"$or": query_filters})
                 if existing:
-                    skipped.append({"url": product_url, "reason": "Already exists in database"})
+                    if existing.get("status") == "FAILED":
+                        p_id = str(existing["_id"])
+                        await db.products.update_one(
+                            {"_id": existing["_id"]},
+                            {"$set": {"status": "PENDING", "error_message": None, "updated_at": utc_now()}}
+                        )
+                        await db.jobs.update_one(
+                            {"product_id": p_id},
+                            {"$set": {"status": "PENDING", "attempts": 0, "error_message": None, "updated_at": utc_now()}},
+                            upsert=True
+                        )
+                        imported.append({"id": p_id, "url": product_url, "platform": scraper.platform_name})
+                    else:
+                        skipped.append({"url": product_url, "reason": f"Already exists ({existing.get('status')})"})
                     continue
 
                 doc = {
@@ -123,7 +136,20 @@ async def import_urls(payload: URLImportRequest):
             # Check existing
             existing = await db.products.find_one({"$or": query_filters})
             if existing:
-                skipped.append({"url": product_url, "reason": "Already exists in database"})
+                if existing.get("status") == "FAILED":
+                    p_id = str(existing["_id"])
+                    await db.products.update_one(
+                        {"_id": existing["_id"]},
+                        {"$set": {"status": "PENDING", "error_message": None, "updated_at": utc_now()}}
+                    )
+                    await db.jobs.update_one(
+                        {"product_id": p_id},
+                        {"$set": {"status": "PENDING", "attempts": 0, "error_message": None, "updated_at": utc_now()}},
+                        upsert=True
+                    )
+                    imported.append({"id": p_id, "url": product_url, "platform": scraper.platform_name})
+                else:
+                    skipped.append({"url": product_url, "reason": f"Already exists ({existing.get('status')})"})
                 continue
 
             # Create initial product document
@@ -329,6 +355,39 @@ async def publish_all_unposted():
         queued += 1
 
     return {"success": True, "queued_count": queued, "message": f"Queued {queued} products for publishing."}
+
+@router.post("/products/retry-failed")
+async def retry_failed_products():
+    """Reset all FAILED products back to PENDING and re-enqueue them for publishing."""
+    db = get_database()
+    if db is None:
+        raise HTTPException(status_code=503, detail="MongoDB not connected.")
+
+    cursor = db.products.find({"status": "FAILED"})
+    failed_pids = []
+    async for prod in cursor:
+        failed_pids.append(str(prod["_id"]))
+
+    if not failed_pids:
+        return {"success": True, "count": 0, "message": "No failed products found to retry."}
+
+    await db.products.update_many(
+        {"_id": {"$in": [ObjectId(pid) for pid in failed_pids]}},
+        {"$set": {"status": "PENDING", "error_message": None, "updated_at": utc_now()}}
+    )
+
+    for pid in failed_pids:
+        await db.jobs.update_one(
+            {"product_id": pid},
+            {"$set": {"status": "PENDING", "attempts": 0, "error_message": None, "updated_at": utc_now()}},
+            upsert=True
+        )
+
+    return {
+        "success": True,
+        "count": len(failed_pids),
+        "message": f"Successfully re-queued {len(failed_pids)} failed products for publishing."
+    }
 
 @router.get("/logs")
 async def get_logs(since_id: int = 0):

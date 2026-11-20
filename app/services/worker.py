@@ -195,17 +195,23 @@ class BackgroundWorker:
                 {"$set": product_data}
             )
 
-            # Mark job completed
+            # Mark job status: only COMPLETED if PUBLISHED or SCRAPED, else FAILED
+            is_success = product_data.get("status") in ("PUBLISHED", "SCRAPED")
+            final_job_status = "COMPLETED" if is_success else "FAILED"
             await db.jobs.update_one(
                 {"_id": job_id},
-                {"$set": {"status": "COMPLETED", "updated_at": utc_now()}}
+                {"$set": {
+                    "status": final_job_status,
+                    "error_message": product_data.get("error_message"),
+                    "updated_at": utc_now()
+                }}
             )
 
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")
             attempts = job.get("attempts", 0) + 1
             max_attempts = job.get("max_attempts", 3)
-            new_status = "RETRYING" if attempts < max_attempts else "FAILED"
+            new_status = "PENDING" if attempts < max_attempts else "FAILED"
 
             await db.jobs.update_one(
                 {"_id": job_id},
@@ -216,6 +222,15 @@ class BackgroundWorker:
                     "updated_at": utc_now()
                 }}
             )
+
+            if new_status == "FAILED" and product_id:
+                try:
+                    await db.products.update_one(
+                        {"_id": ObjectId(product_id) if isinstance(product_id, str) else product_id},
+                        {"$set": {"status": "FAILED", "error_message": str(e), "updated_at": utc_now()}}
+                    )
+                except Exception:
+                    pass
 
             # Ensure cleanup if an unhandled crash happened before finally block
             if staging_dir:
