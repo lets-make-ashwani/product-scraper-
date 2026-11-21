@@ -257,23 +257,101 @@ class FlipkartScraper(BaseScraper):
                     except Exception:
                         pass
 
-                # 5. Color variants
-                v_matches = re.findall(r'"url":\s*"(/[^"]*?[?&]pid=[^"]+)"', raw_text)
-                seen_variants = set()
-                for v_path in v_matches:
-                    v_url = f"https://www.flipkart.com{v_path}"
-                    norm_v = self.normalize_url(v_url)
-                    if norm_v != product.normalized_url and norm_v not in seen_variants:
-                        seen_variants.add(norm_v)
-                        c_match = re.search(r'flipkart\.com/([^/?#]+)/p/', norm_v)
-                        c_name = unquote(c_match.group(1).replace('-', ' ')).title() if c_match else f"Color {len(product.colors)+1}"
-                        product.colors.append(ColorVariant(
-                            color_name=c_name,
-                            variant_url=norm_v,
-                            image_urls=[]
-                        ))
-                    if len(product.colors) >= 8:
-                        break
+                # 5. Extract Specifications & Key-Value Attributes
+                specs = {}
+                def walk_specs(obj):
+                    if isinstance(obj, dict):
+                        if "label_0" in obj and "label_1" in obj:
+                            k = obj["label_0"].get("value", {}).get("text")
+                            v = obj["label_1"].get("value", {}).get("text")
+                            if k and v:
+                                if isinstance(v, list):
+                                    v = ", ".join(str(x) for x in v)
+                                k = str(k).strip()
+                                if k not in specs and len(k) < 40 and not k.startswith("₹"):
+                                    specs[k] = str(v).strip()
+                        for val in obj.values():
+                            walk_specs(val)
+                    elif isinstance(obj, list):
+                        for item in obj:
+                            walk_specs(item)
+
+                walk_specs(data)
+
+                # Set primary color
+                product.primary_color = specs.get("Color") or specs.get("Brand Color") or specs.get("Selected Color:")
+
+                # 6. Extract Genuine Color Variants & Swatches (from variant-selector widget)
+                color_variants = []
+                sizes = []
+                for s in slots:
+                    w = s.get("widget", {})
+                    v_type = str(w.get("viewType", ""))
+                    dls = w.get("data", {}).get("dlsData", {})
+
+                    if "variant-selector" in v_type:
+                        for k, val in dls.items():
+                            if isinstance(val, dict):
+                                h_list = val.get("value", {}).get("horizontalListData_0", {}).get("value", [])
+                                for item in h_list:
+                                    tracking = item.get("value", {}).get("trackerData_0", {}).get("tracking", {})
+                                    c_title = tracking.get("contentTitle")
+                                    c_url = item.get("value", {}).get("box_0", {}).get("action", {}).get("url")
+                                    img_url = item.get("value", {}).get("image_0", {}).get("value", {}).get("url")
+                                    if c_title and len(c_title) < 25 and not c_title.lower().startswith("http"):
+                                        c_clean = c_title.strip().title()
+                                        if c_clean.lower() not in product.title.lower() and c_clean not in [c.color_name for c in color_variants]:
+                                            norm_var_url = self.normalize_url(f"https://www.flipkart.com{c_url}") if c_url else None
+                                            high_img = self._upgrade_image_url(img_url) if img_url else None
+                                            color_variants.append(ColorVariant(
+                                                color_name=c_clean,
+                                                variant_url=norm_var_url,
+                                                image_urls=[high_img] if high_img else []
+                                            ))
+
+                    if "size-selector" in v_type or "size" in v_type.lower():
+                        raw_s_str = json.dumps(dls)
+                        size_matches = re.findall(r'"contentTitle":\s*"([XSML\d/ -]{1,10})"', raw_s_str)
+                        for sz in size_matches:
+                            sz = sz.strip()
+                            if sz and sz not in sizes and len(sz) <= 6:
+                                sizes.append(sz)
+
+                product.colors = color_variants
+                product.sizes = sizes
+
+                # 7. Compose Rich Product Highlights
+                highlight_lines = []
+                fabric = specs.get("Fabric") or specs.get("Kurta Fabric") or specs.get("Top fabric")
+                salwar_fabric = specs.get("Salwar Fabric") or specs.get("Bottom fabric")
+                if fabric and salwar_fabric and fabric != salwar_fabric:
+                    highlight_lines.append(f"• Fabric: {fabric} (Bottom: {salwar_fabric})")
+                elif fabric:
+                    highlight_lines.append(f"• Fabric: {fabric}")
+
+                pattern = specs.get("Pattern") or specs.get("Pattern/Print Type")
+                if pattern:
+                    highlight_lines.append(f"• Pattern: {pattern}")
+
+                items_inc = specs.get("Items Included") or specs.get("Type") or specs.get("Top type")
+                if items_inc:
+                    highlight_lines.append(f"• Includes: {items_inc}")
+
+                sleeve = specs.get("Sleeve") or specs.get("Sleeve Style")
+                neck = specs.get("Neck")
+                if sleeve and neck:
+                    highlight_lines.append(f"• Style: {neck}, {sleeve}")
+                elif sleeve:
+                    highlight_lines.append(f"• Sleeve: {sleeve}")
+                elif neck:
+                    highlight_lines.append(f"• Neck: {neck}")
+
+                occasion = specs.get("Occasion")
+                if occasion:
+                    highlight_lines.append(f"• Occasion: {occasion}")
+
+                if highlight_lines:
+                    product.highlights = "\n".join(highlight_lines)
 
                 logger.info(f"[Flipkart] Rome API extracted {len(product.primary_images)} gallery images and ₹{product.pricing.deal_price} for '{product.title[:35]}...'")
                 return product

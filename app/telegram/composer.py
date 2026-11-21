@@ -22,12 +22,20 @@ class TelegramComposer:
             rev_text = f" ({product.rating.review_count:,} reviews)" if product.rating.review_count else ""
             rating_info = f"⭐ <b>Rating:</b> {product.rating.score}/5{rev_text}\n"
 
-        # Color Variants
+        # Color Variants & Primary Color
         colors_info = ""
+        valid_colors = []
         if product.colors:
-            color_names = [f"• {c.color_name}" for c in product.colors if c.color_name]
-            if color_names:
-                colors_info = f"\n🎨 <b>Available in {len(color_names)} Colors:</b>\n" + "\n".join(color_names[:6]) + "\n"
+            for c in product.colors:
+                c_name = c.color_name.strip()
+                if c_name and c_name.lower() not in product.title.lower() and not c_name.lower().startswith("color "):
+                    if c_name not in valid_colors:
+                        valid_colors.append(c_name)
+
+        if valid_colors:
+            colors_info = f"\n🎨 <b>Available in {len(valid_colors)} Colors:</b>\n" + "\n".join([f"• {c}" for c in valid_colors[:6]]) + "\n"
+        elif getattr(product, "primary_color", None):
+            colors_info = f"🎨 <b>Color:</b> {product.primary_color}\n"
 
         # Sizes
         sizes_info = ""
@@ -35,21 +43,29 @@ class TelegramComposer:
             sizes_info = f"📏 <b>Sizes:</b> {', '.join(product.sizes[:6])}\n"
 
         # Description / Highlights
-        desc = (product.description or "High quality product with premium finish.").strip()
-        if len(desc) > 250:
-            desc = desc[:247] + "..."
+        raw_highlights = getattr(product, "highlights", None) or product.description
+        if not raw_highlights or raw_highlights.strip() == "High quality product with premium finish.":
+            raw_highlights = "• Premium ethnic wear with high quality finish."
+
+        desc = raw_highlights.strip()
+        if len(desc) > 350:
+            desc = desc[:347] + "..."
 
         link_block = f"\n\n🔗 <b>Buy Link:</b>\n{product.product_url}"
 
-        body = (
-            f"🛍️ <b>{product.title}</b>\n\n"
-            f"💰 <b>Deal Price:</b> ₹{price_str} {mrp_info} {discount_info}\n"
-            f"{rating_info}"
-            f"{colors_info}"
-            f"{sizes_info}\n"
-            f"✨ <b>Highlights:</b>\n{desc}"
-        )
+        body_parts = [
+            f"🛍️ <b>{product.title}</b>\n\n",
+            f"💰 <b>Deal Price:</b> ₹{price_str} {mrp_info} {discount_info}\n".strip() + "\n"
+        ]
+        if rating_info:
+            body_parts.append(rating_info)
+        if colors_info:
+            body_parts.append(colors_info)
+        if sizes_info:
+            body_parts.append(sizes_info)
+        body_parts.append(f"\n✨ <b>Highlights:</b>\n{desc}")
 
+        body = "".join(body_parts).strip()
         max_body_len = 1015 - len(link_block)
         if len(body) > max_body_len:
             body = body[:max_body_len - 3].rstrip() + "..."

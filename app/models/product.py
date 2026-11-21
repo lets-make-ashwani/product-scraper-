@@ -32,6 +32,8 @@ class UniversalProduct(BaseModel):
     brand: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
+    highlights: Optional[str] = None
+    primary_color: Optional[str] = None
     pricing: ProductPricing = Field(default_factory=ProductPricing)
     rating: Optional[ProductRating] = None
     sizes: List[str] = Field(default_factory=list)
